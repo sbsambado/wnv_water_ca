@@ -1,3 +1,5 @@
+Manuscript in prep
+
 # Water availability & WNV hotspots
 
 This repository contains the full workflow for analyzing environmental and hydrological drivers of West Nile Virus (WNV) patterns in California. 
