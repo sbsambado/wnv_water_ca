@@ -1,0 +1,53 @@
+---
+title: "download calsurv data"
+output: html_document
+---
+
+Manuscript ID: RSTB-2025-0484
+
+Title: Water availability affects West Nile virus dynamics in a heavily managed agricultural landscape
+
+Authors: Samantha Sambado, Andrew J. MacDonald, Alex Konings, and Erin A. Mordecai
+
+Corresponding author: ssambado@stanford.edu
+
+```{r setup, include=FALSE}
+## upload packages
+library(readr)
+library(googledrive)
+
+```
+
+
+## Write function to call in data from Google Drive
+```{r}
+download_calsurv <- function(folder_id, out_dir) {
+
+  folder <- drive_get(folder_id)
+  files <- drive_ls(folder)
+
+  for (i in seq_len(nrow(files))) {
+
+    temp <- tempfile(fileext = ".csv")
+
+    drive_download(as_id(files$id[i]),
+                   path = temp,
+                   overwrite = TRUE)
+
+    df <- read_csv(temp, show_col_types = FALSE)
+
+    write_csv(df,here(out_dir, files$name[i]))
+
+    message("Downloaded: ", files$name[i])
+  }
+}
+
+```
+
+## Apply function to bring data to local drive
+```{r}
+download_calsurv(folder_id = "data-000092", out_dir = "data/raw/restricted/main")
+
+download_calsurv(folder_id = "data-000098", out_dir = "data/raw/restricted/sutter")
+
+```

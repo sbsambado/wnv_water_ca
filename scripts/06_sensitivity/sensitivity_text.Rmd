@@ -1,0 +1,1952 @@
+---
+title: "sensitivity_text"
+output: html_document
+---
+
+Manuscript ID: RSTB-2025-0484
+
+Title: Water availability affects West Nile virus dynamics in a heavily managed agricultural landscape
+
+Authors: Samantha Sambado, Andrew J. MacDonald, Alex Konings, and Erin A. Mordecai
+
+Corresponding author: ssambado@stanford.edu
+
+```{r setup, include=FALSE}
+library(here)
+library(fixest)
+library(broom)
+library(purrr)
+library(car)
+
+## upload filtered panel data
+abund_tar_panel_select <- read.csv(here("data", "derived", "abund_tar_panel_select.csv"))
+wnv_tar_panel_select <- read.csv(here("data", "derived", "wnv_tar_panel_select.csv"))
+
+
+## upload model results
+#mod_fe_abund_pdsi <- readRDS(here("outputs", "models", "mod_fe_abund_pdsi.rds"))
+#
+#abund_pdsi_coef <- broom::tidy(mod_fe_abund_pdsi) %>% 
+#  filter(term == "pdsi_lag0") %>% 
+#  mutate(outcome = "Abundance")
+#
+#
+##mod_fe_wnv_pdsi <- readRDS(here("outputs", "models", "mod_fe_wnv_pdsi.rds"))
+#
+#wnv_pdsi_coef <- broom::tidy(mod_fe_wnv_pdsi) %>% 
+#  filter(term == "pdsi_lag0") %>% 
+#  mutate(outcome = "WNV MIR")
+#
+#
+##saveRDS(mod_fe_abund_pdsi_HR,file = here("outputs", "models", "mod_fe_abund_pdsi_HR.rds"))
+
+counties_sac <- c("Butte", "Glenn", "Colusa", "Yolo", "Sacramento",
+                  "Placer", "Yuba", "Shasta", "Tehama", "Sutter", "Shasta")
+
+counties_sanjoaquin <- c("San Joaquin", "Stanislaus", "Merced","Madera", "Fresno")
+
+counties_tulare <- c("Kings", "Tulare", "Kern")
+
+county_to_hr <- dplyr::bind_rows(data.frame(county = counties_sac, hydro_region = "Sacramento River HR"),
+  data.frame(county = counties_sanjoaquin,hydro_region = "San Joaquin River HR"),
+  data.frame(county = counties_tulare,hydro_region = "Tulare Lake HR"))
+```
+
+# Supplemental Text
+
+# Effect of PDSI
+## Abundance
+## Text S4
+
+### S4.1-S4.2
+```{r}
+## build model 
+mod_fe_abund_pdsi <- feols(log(mos_per_trap_night + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_tar_panel_select)
+
+# check summaries
+summary(mod_fe_abund_pdsi)
+round(confint(mod_fe_abund_pdsi, level = 0.95),2)
+
+# clean up
+broom::tidy(mod_fe_abund_pdsi) %>% 
+  mutate(across(where(is.numeric), ~ round(., 2)))
+```
+
+### S4.3.1
+Tale of varying fixed effects
+```{r}
+
+mod_fe_abund_pdsi_csw <- feols(log(mos_per_trap_night + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) |
+                             csw0(cluster_id, cluster_id + year, cluster_id + month, cluster_id + year + month),
+                           vcov = conley(5),
+                           data = abund_tar_panel_select)
+
+etable(mod_fe_abund_pdsi_csw,
+       headers = c("OLS", "Cluster FE", "Cluster + Month FE",
+                   "Cluster + Year FE", "Cluster + Month + Year FE"),
+       dict = c("log(mos_per_trap_night+1" = "Abundance",
+                pdsi_lag0 = "PDSI",
+                temp_lag0 = "Temp (std)",
+                temp_lag0_sq = "Temp^2 (std)"),
+       fitstat = ~ n + r2 + wr2,
+        digits = 3, style.tex = style.tex("aer"))
+
+
+
+```
+
+### S4.3.2
+Multicollinearity
+```{r}
+mod_ols_abund_pdsi <- lm(log(mos_per_trap_night + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) , data = abund_tar_panel_select)
+vif(mod_ols_abund_pdsi)
+```
+
+(Robustness checks)
+### S4.4.1 
+Alternative fixed effects
+```{r}
+### format data
+# set up dictionary
+outcome <- "log(mos_per_trap_night + 1)"
+
+covariates <- "pdsi_lag0 + temp_lag0 + I(temp_lag0^2)"
+
+FE_list <- list("cluster + month + year" = ~cluster_id + month + year,
+                "cluster + month" = ~cluster_id + month,
+                "cluster + year" = ~cluster_id + year,
+                "cluster" = ~cluster_id,
+                "OLS" = NULL)
+
+
+run_model_fe_abund <- function(FE_formula){
+  
+  if(is.null(FE_formula)) {
+    fml <- as.formula(paste(outcome, "~", covariates))
+  }
+  else{
+    fe_vars <- all.vars(FE_formula)
+    fml <- as.formula(paste(outcome, "~", covariates, "|", paste(fe_vars, collapse = " + ")))
+  }
+  feols(fml, vcov = conley(5), data = abund_tar_panel_select)
+  
+}
+
+# run model
+
+models_abund_pdsi <- purrr::map(FE_list, run_model_fe_abund) 
+
+
+# extract coefficients
+models_abund_pdsi_coef <- map_dfr(names(models_abund_pdsi), function(name) {
+  m <- models_abund_pdsi[[name]]
+  broom::tidy(m) %>% 
+    filter(term == "pdsi_lag0") %>% 
+    mutate(FE = name)
+  
+})
+
+### plot data
+fig_st_441 <- models_abund_pdsi_coef %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS"))) %>% 
+ggplot(aes(x = FE, y = estimate)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, color = "#007fff") +
+  geom_point(size = 6.5, color = "#007fff") +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate",
+       title = "Abundance ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank())
+
+ggsave(fig_st_441, file = here("outputs", "figures", "supplement", "fig_st_441.png"), 
+       height = 5, width = 12.2,
+       dpi = 400, bg = "white")
+```
+
+### S4.4.2
+Alternative model types
+```{r}
+# set up dictionary
+covariates <- "pdsi_lag0 + temp_lag0 + I(temp_lag0^2)"
+
+FE_list <- list("cluster + month + year" = ~cluster_id + month + year,
+                "cluster + month" = ~cluster_id + month,
+                "cluster + year" = ~cluster_id + year,
+                "cluster" = ~cluster_id,
+                "OLS" = NULL)
+
+
+outcome_list <- list(log_abund = "log(mos_per_trap_night + 1)",
+                     fepois = "fepois(mos_per_trap_night)",
+                     fenegbin = "fenegbin(mos_per_trap_night)")
+
+
+run_model_modeltype_abund <- function(model_type, FE_formula) {
+  
+  if (is.null(FE_formula)) {
+    # OLS case (no fixed effects)
+    
+    if(model_type == "log_abund") {
+      feols(as.formula(paste("log(mos_per_trap_night + 1) ~", covariates)),
+            vcov = conley(5), data = abund_tar_panel_select)
+      
+    } else if(model_type == "fepois") {
+      fepois(as.formula(paste("mos_per_trap_night ~", covariates)),
+             vcov = conley(5), data = abund_tar_panel_select)
+      
+    } else if(model_type == "fenegbin"){
+      fenegbin(as.formula(paste("mos_per_trap_night ~", covariates)),
+               vcov = conley(5), data = abund_tar_panel_select)
+    }
+    
+  } else {
+    # FE case
+    
+    fe_vars <- all.vars(FE_formula)
+    fe_part <- paste(fe_vars, collapse = " + ")
+    
+    if(model_type == "log_abund") {
+      feols(as.formula(paste("log(mos_per_trap_night + 1) ~", covariates, "|", fe_part)),
+            vcov = conley(5), data = abund_tar_panel_select)
+      
+    } else if(model_type == "fepois") {
+      fepois(as.formula(paste("mos_per_trap_night ~", covariates, "|", fe_part)),
+             vcov = conley(5), data = abund_tar_panel_select)
+      
+    } else if(model_type == "fenegbin"){
+      fenegbin(as.formula(paste("mos_per_trap_night ~", covariates, "|", fe_part)),
+               vcov = conley(5), data = abund_tar_panel_select)
+    }
+  }
+}
+
+# extract coefficients
+models_abund_modtype_pdsi_coef <- map_dfr(names(FE_list), function(fe_name) {
+  
+  FE_formula <- FE_list[[fe_name]]
+  
+  map_dfr(names(outcome_list), function(model_name){
+    m <- run_model_modeltype_abund(model_name, FE_formula)
+    
+    broom::tidy(m) %>% 
+      filter(term == "pdsi_lag0") %>% 
+      mutate(FE = fe_name,
+             model_type = model_name)
+  })
+})
+
+## plot
+fig_st_442 <- models_abund_modtype_pdsi_coef %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS"))) %>% 
+ggplot(aes(x = FE, y = estimate, color = model_type)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, 
+                position = position_dodge(width = .6)) +
+  geom_point(size = 6.5, position = position_dodge(width = .6)) +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("log_abund" = "#016392", #"#016392",
+                                "fepois" = "#1F9E89",  #"#C72E29",
+                                "fenegbin" = "#D87B82"), #"#098154"),
+                     labels = c("log(Abundance+1)", "FE Poisson", "FE NegBin")) +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate", color = "Model Type",
+       title = "Abundance ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 16),
+        legend.position = "bottom") 
+
+ggsave(fig_st_442, file = here("outputs", "figures", "supplement", "fig_st_442.png"), 
+       height = 5, width = 12.2,
+       dpi = 400, bg = "white")
+```
+
+### S4.4.3
+Alternative PDSI lags
+```{r}
+
+pdsi_lags <- c("0-month lag" = "pdsi_lag0",
+               "1-month lag" = "pdsi_lag1",
+               "2-month lag" = "pdsi_lag2",
+               "3-month lag" = "pdsi_lag3",
+               "4-month lag" = "pdsi_lag4")
+
+FE_list <- list("cluster + month + year" = ~cluster_id + month + year,
+                "cluster + month" = ~cluster_id + month,
+                "cluster + year" = ~cluster_id + year,
+                "cluster" = ~cluster_id,
+                "OLS" = NULL)
+
+
+run_model_fe_abund_pdsilags <- function(pdsi_var, FE_formula) {
+  
+  # RHS of regression
+  rhs <- paste(pdsi_var, "+ temp_lag0 + I(temp_lag0^2)")
+  
+  if (is.null(FE_formula)) {
+    
+    # OLS (no FE)
+    fml <- as.formula(paste("log(mos_per_trap_night + 1) ~", rhs))
+    
+  } else {
+    
+    # FE case
+    fe_part <- paste(all.vars(FE_formula), collapse = " + ")
+    fml <- as.formula(paste("log(mos_per_trap_night + 1) ~", rhs, "|", fe_part))
+  }
+  
+  feols(fml, vcov = conley(5), data = abund_tar_panel_select)
+}
+
+
+# run all models + extract coefficients
+models_abund_pdsilags_coef <- purrr::map_dfr(names(FE_list), function(fe_name) {
+  
+  FE_formula <- FE_list[[fe_name]]
+  
+  purrr::map_dfr(names(pdsi_lags), function(lag_name) {
+    
+    pdsi_var <- pdsi_lags[[lag_name]]
+    
+    m <- run_model_fe_abund_pdsilags(pdsi_var, FE_formula)
+    
+    broom::tidy(m) %>% 
+      dplyr::filter(term == pdsi_var) %>% 
+      dplyr::mutate(
+        FE = fe_name,
+        pdsi_lag = lag_name
+      )
+  })
+})
+
+
+## plot
+
+fig_st_443 <- models_abund_pdsilags_coef %>% 
+  filter(pdsi_lag != "4-month lag") %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS"))) %>% 
+ggplot(aes(x = FE, y = estimate, color = pdsi_lag)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, 
+                position = position_dodge(width = .6)) +
+  geom_point(size = 6.5, position = position_dodge(width = .6)) +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("#016392","#1F9E89",  "#E0AC5F","#D87B82")) +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate", color = "PDSI Lags",
+       title = "Abundance ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 16),
+        legend.position = "bottom") 
+
+
+ggsave(fig_st_443, file = here("outputs", "figures", "supplement", "fig_st_443.png"), 
+       height = 5, width = 12.2,
+       dpi = 400, bg = "white")
+
+```
+
+### S4.4.4
+Alternative temperature functional forms
+```{r}
+## build model
+control_list <- c("no temp" = "pdsi_lag0",
+                  "temp linear" = "pdsi_lag0 + temp_lag0",
+                  "temp quadratic" = "pdsi_lag0 + temp_lag0 + I(temp_lag0^2)")
+
+
+run_model_fe_abund_tempform <- function(covariates, FE_formula){
+  
+  if (is.null(FE_formula)) {
+    
+    fml <- as.formula(paste(outcome, "~", covariates))
+    
+  } else {
+    
+    fe_vars <- all.vars(FE_formula)
+    fe_part <- paste(fe_vars, collapse = " + ")
+    
+    fml <- as.formula(paste(outcome, "~", covariates, "|", fe_part))
+  }
+  
+  feols(fml, vcov = conley(5), data = abund_tar_panel_select)
+}
+
+models_abund_tempform_coef <- purrr::map_dfr(names(FE_list), function(fe_name) {
+  
+  FE_formula <- FE_list[[fe_name]]
+  
+  purrr::map_dfr(names(control_list), function(control_name) {
+    
+    covars <- control_list[[control_name]]
+    
+    m <- run_model_fe_abund_tempform(covars, FE_formula)
+    
+    broom::tidy(m) %>% 
+      dplyr::filter(term == "pdsi_lag0") %>% 
+      dplyr::mutate(FE = fe_name,
+                    control_spec = control_name)
+  })
+})
+
+## plot
+fig_st_444 <- models_abund_tempform_coef %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS"))) %>% 
+ggplot(aes(x = FE, y = estimate, color = control_spec)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, 
+                position = position_dodge(width = .6)) +
+  geom_point(size = 6.5, position = position_dodge(width = .6)) +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("#016392","#1F9E89","#D87B82")) +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate", color = "Controls",
+       title = "Abundance ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 16),
+        legend.position = "bottom") 
+
+ggsave(fig_st_444, file = here("outputs", "figures", "supplement", "fig_st_444.png"), 
+       height = 5, width = 12.2,
+       dpi = 400, bg = "white")
+```
+
+### S4.4.5
+Alternative Conley spatial cutoffs
+```{r}
+
+## build model
+conley_list <- c("1.5" = 1.5,
+                 "5" = 5,
+                 "10" = 10,
+                 "15" = 15,
+                 "20" = 20,
+                 "25" = 25)
+
+# formulate model
+run_model_fe_conley <- function(FE_formula, conley_cutoff){
+  
+  covariates <- "pdsi_lag0 + temp_lag0 + I(temp_lag0^2)"
+  
+  if (is.null(FE_formula)) {
+    
+    fml <- as.formula(paste(outcome, "~", covariates))
+    
+  } else {
+    
+    fe_vars <- all.vars(FE_formula)
+    fe_part <- paste(fe_vars, collapse = " + ")
+    
+    fml <- as.formula(paste(outcome, "~", covariates, "|", fe_part))
+  }
+  
+  feols(fml,
+        vcov = conley(conley_cutoff),
+        data = abund_tar_panel_select)
+}
+
+models_abund_conley_coef <- purrr::map_dfr(names(FE_list), function(fe_name) {
+  
+  FE_formula <- FE_list[[fe_name]]
+  
+  purrr::map_dfr(names(conley_list), function(conley_name) {
+    
+    cutoff <- conley_list[[conley_name]]
+    
+    m <- run_model_fe_conley(FE_formula, cutoff)
+    
+    broom::tidy(m) %>% 
+      dplyr::filter(term == "pdsi_lag0") %>% 
+      dplyr::mutate(FE = fe_name,
+                    conley_km = conley_name)
+  })
+})
+
+## plot it
+fig_st_445 <- models_abund_conley_coef  %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS")),
+         conley_km = factor(conley_km, levels = c("1.5",
+                                                  "5", 
+                                                  "10",
+                                                  "15",
+                                                  "20",
+                                                  "25"))) %>% 
+ggplot(aes(x = FE, y = estimate, color = conley_km)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, 
+                position = position_dodge(width = .6)) +
+  geom_point(size = 6.5, position = position_dodge(width = .6)) +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("#016392","#1F9E89", "#7E8C69", "#E0AC5F","#D87B82", "#B85C38")) +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate", color = "Conley SEs",
+       title = "Abundance ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 16),
+        legend.position = "bottom")  +
+  guides(color = guide_legend(nrow = 1))
+
+ggsave(fig_st_445, file = here("outputs", "figures", "supplement", "fig_st_445.png"), 
+       height = 5, width = 12.2,
+       dpi = 400, bg = "white")
+
+```
+
+### S4.5
+Supporting figures - histogram
+```{r}
+
+raw <- abund_tar_panel_select %>% 
+  ggplot(aes(x = mos_per_trap_night)) +
+  geom_histogram(fill = "#007fff", color = "#606372") + #"#79A8A4"
+  labs(x = "Number of trap stations per cluster", y = "Count of clusters") +
+  ggtitle("Raw Distribution") +
+  theme(axis.title = element_text(size = 14, face = "bold")) +
+  theme_minimal(base_size = 18) +
+  labs(x = "",y = "Count") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.position = "none") 
+
+
+log <- abund_tar_panel_select %>% 
+  ggplot(aes(x = log(mos_per_trap_night+1))) +
+  geom_histogram(fill = "#007fff", color = "#606372") + #"#79A8A4"
+  labs(x = "Number of trap stations per cluster", y = "Count of clusters") +
+  ggtitle("Log-transformed Distribution") +
+  theme(axis.title = element_text(size = 14, face = "bold")) +
+  theme_minimal(base_size = 18) +
+  labs(x = "",y = "Count") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.position = "none") 
+
+## combine both
+hist_both <- ggarrange(raw + rremove("xlab"), log + rremove("ylab") + rremove("xlab"), common.legend = TRUE)
+
+hist_both_an <- annotate_figure(hist_both, 
+                                bottom = text_grob("Mean Mosquitoes per Trap Night", size = 18, face = "bold"))
+
+ggsave(hist_both_an, file = here("outputs", "figures", "supplement", "fig_st_45_hist.png"), 
+        height = 5, width = 12,
+       dpi = 400, bg = "white")
+```
+
+Supporting figures - marginal effects plots
+```{r}
+######## PDSI
+# Create grid of PDSI values
+pdsi_seq <- seq(min(abund_tar_panel_select$pdsi_lag0, na.rm = TRUE), 
+                max(abund_tar_panel_select$pdsi_lag0, na.rm = TRUE), 
+                length.out = 100)
+
+# Mean temperature for holding constant
+mean_temp <- mean(abund_tar_panel_select$temp_lag0, na.rm = TRUE)
+
+# Use predict from fixest with se.fit = TRUE
+pred <- predict(mod_fe_abund_pdsi_csw[[1]], 
+                newdata = data.frame(pdsi_lag0 = pdsi_seq,
+                                     temp_lag0 = mean_temp),
+                se.fit = TRUE, type = "response") 
+
+# Build dataframe for plotting
+plot_df <- data.frame(pdsi = pdsi_seq, fit = pred$fit,
+                      lower = pred$fit - 1.96 * pred$se.fit, upper = pred$fit + 1.96 * pred$se.fit)
+
+# Plot predicted effect
+mod_ols_abund_pdsi_ME <- ggplot(plot_df, aes(x = pdsi, y = fit)) +
+  geom_line(size = 1.3, color = "#007fff") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, fill = "#007fff") +
+  labs(x = "Palmer Drought Severity Index (PDSI)", 
+       y = "Predicted log(mosquitoes per trap night + 1)") +
+  theme_minimal(base_size = 13) +
+  theme_classic() +
+  scale_x_continuous(expand = c(0,0)) +
+  theme(axis.title = element_text(face = "bold", size = 13),
+        axis.text = element_text(size = 12))
+
+######## TEMP^2
+# Create grid of TEMP^2 values
+temp_seq <- seq(min(abund_tar_panel_select$temp_lag0, na.rm = TRUE), 
+                max(abund_tar_panel_select$temp_lag0, na.rm = TRUE), 
+                length.out = 100)
+
+temp_raw_seq <- seq(min(abund_tar_panel_select$temp_raw, na.rm = TRUE), 
+                max(abund_tar_panel_select$temp_raw, na.rm = TRUE), 
+                length.out = 100)
+
+# Mean pdsi for holding constant
+mean_pdsi <- mean(abund_tar_panel_select$pdsi_lag0, na.rm = TRUE)
+
+# Use predict from fixest with se.fit = TRUE
+pred <- predict(mod_fe_abund_pdsi_csw[[1]], 
+                newdata = data.frame(pdsi_lag0 = mean_pdsi,
+                                     temp_lag0 = temp_seq),
+                se.fit = TRUE, type = "response") 
+
+# Build dataframe for plotting
+plot_df <- data.frame(temp_C = temp_raw_seq, fit = pred$fit,
+                      lower = pred$fit - 1.96 * pred$se.fit, upper = pred$fit + 1.96 * pred$se.fit)
+
+
+mod_ols_abund_temp_ME <- ggplot(plot_df, aes(x = temp_C, y = fit)) +
+  geom_line(size = 1.3, color = "#007fff") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, fill = "#007fff") +
+  labs(x = "Temperature (°C)", 
+       y = "Predicted Abundance") +
+  theme_minimal(base_size = 13) +
+  theme_classic() +
+  scale_x_continuous(expand = c(0,0)) +
+  theme(axis.title = element_text(face = "bold", size = 13),
+        axis.text = element_text(size = 12))
+
+ggsave(mod_ols_abund_temp_ME, file = here("outputs", "figures", "supplement", "fig_st_45_METemp.png"), 
+       height = 3, width = 4,
+       dpi = 400, bg = "white")
+```
+
+
+
+
+
+## WNV MIR
+## Text S5
+
+### S5.1-S5.2
+```{r}
+## build model 
+mod_fe_wnv_pdsi <- feols(log(WNV_MIR + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0 |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = wnv_tar_panel_under101)
+
+# check summaries
+summary(mod_fe_wnv_pdsi)
+round(confint(mod_fe_wnv_pdsi, level = 0.95),2)
+
+# clean up
+broom::tidy(mod_fe_wnv_pdsi) %>% 
+  mutate(across(where(is.numeric), ~ round(., 2)))
+```
+
+### S5.3.1
+Tale of varying fixed effects
+```{r}
+
+mod_fe_wnv_pdsi_csw <- feols(log(WNV_MIR + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0 |
+                             csw0(cluster_id, cluster_id + year, cluster_id + month, cluster_id + year + month),
+                           vcov = conley(5),
+                           data = wnv_tar_panel_under101)
+
+etable(mod_fe_wnv_pdsi_csw,
+       headers = c("OLS", "Cluster FE", "Cluster + Month FE",
+                   "Cluster + Year FE", "Cluster + Month + Year FE"),
+       dict = c("log(WNV_MIR +1)" = "WNV MIR",
+                pdsi_lag0 = "PDSI",
+                temp_lag0 = "Temp (std)",
+                temp_lag0_sq = "Temp^2 (std)"),
+       fitstat = ~ n + r2 + wr2,
+        digits = 3, style.tex = style.tex("aer"))
+
+
+
+```
+
+### S5.3.2
+Multicollinearity
+```{r}
+mod_ols_wnv_pdsi <- lm(log(WNV_MIR + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0, data = wnv_tar_panel_under101)
+vif(mod_ols_wnv_pdsi)
+```
+
+(Robustness checks)
+### S5.4.1 
+Alternative fixed effects
+```{r}
+### format data
+# set up dictionary
+outcome <- "log(WNV_MIR + 1)"
+
+covariates <- "pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0"
+
+FE_list <- list("cluster + month + year" = ~cluster_id + month + year,
+                "cluster + month" = ~cluster_id + month,
+                "cluster + year" = ~cluster_id + year,
+                "cluster" = ~cluster_id,
+                "OLS" = NULL)
+
+
+run_model_fe_wnv <- function(FE_formula){
+  
+  if(is.null(FE_formula)) {
+    fml <- as.formula(paste(outcome, "~", covariates))
+  }
+  else{
+    fe_vars <- all.vars(FE_formula)
+    fml <- as.formula(paste(outcome, "~", covariates, "|", paste(fe_vars, collapse = " + ")))
+  }
+  feols(fml, vcov = conley(5), data = wnv_tar_panel_under101)
+  
+}
+
+# run model
+
+models_wnv_pdsi <- purrr::map(FE_list, run_model_fe_wnv) 
+
+
+# extract coefficients
+models_wnv_pdsi_coef <- map_dfr(names(models_wnv_pdsi), function(name) {
+  m <- models_wnv_pdsi[[name]]
+  broom::tidy(m) %>% 
+    filter(term == "pdsi_lag0") %>% 
+    mutate(FE = name)
+  
+})
+
+### plot data
+fig_st_541 <- models_wnv_pdsi_coef %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS"))) %>% 
+ggplot(aes(x = FE, y = estimate)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, color = "#007fff") +
+  geom_point(size = 6.5, color = "#007fff") +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate",
+       title = "WNV MIR ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank())
+
+ggsave(fig_st_541, file = here("outputs", "figures", "supplement", "fig_st_541.png"), 
+       height = 5, width = 12.2,
+       dpi = 400, bg = "white")
+```
+
+### S5.4.2
+Alternative model types
+```{r}
+# set up dictionary
+covariates <- "pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0"
+
+FE_list <- list("cluster + month + year" = ~cluster_id + month + year,
+                "cluster + month" = ~cluster_id + month,
+                "cluster + year" = ~cluster_id + year,
+                "cluster" = ~cluster_id,
+                "OLS" = NULL)
+
+
+outcome_list <- list(log_wnv = "log(WNV_MIR + 1)",
+                     fepois = "fepois(WNV_MIR)",
+                     fenegbin = "fenegbin(WNV_MIR)")
+
+
+run_model_modeltype_wnv <- function(model_type, FE_formula) {
+  
+  if (is.null(FE_formula)) {
+    # OLS case (no fixed effects)
+    
+    if(model_type == "log_wnv") {
+      feols(as.formula(paste("log(WNV_MIR + 1) ~", covariates)),
+            vcov = conley(5), data = wnv_tar_panel_under101)
+      
+    } else if(model_type == "fepois") {
+      fepois(as.formula(paste("WNV_MIR ~", covariates)),
+             vcov = conley(5), data = wnv_tar_panel_under101)
+      
+    } else if(model_type == "fenegbin"){
+      fenegbin(as.formula(paste("WNV_MIR ~", covariates)),
+               vcov = conley(5), data = wnv_tar_panel_under101)
+    }
+    
+  } else {
+    # FE case
+    
+    fe_vars <- all.vars(FE_formula)
+    fe_part <- paste(fe_vars, collapse = " + ")
+    
+    if(model_type == "log_wnv") {
+      feols(as.formula(paste("log(WNV_MIR + 1) ~", covariates, "|", fe_part)),
+            vcov = conley(5), data = wnv_tar_panel_under101)
+      
+    } else if(model_type == "fepois") {
+      fepois(as.formula(paste("WNV_MIR ~", covariates, "|", fe_part)),
+             vcov = conley(5), data = wnv_tar_panel_under101)
+      
+    } else if(model_type == "fenegbin"){
+      fenegbin(as.formula(paste("WNV_MIR ~", covariates, "|", fe_part)),
+               vcov = conley(5), data = wnv_tar_panel_under101)
+    }
+  }
+}
+
+# extract coefficients
+models_wnv_modtype_pdsi_coef <- map_dfr(names(FE_list), function(fe_name) {
+  
+  FE_formula <- FE_list[[fe_name]]
+  
+  map_dfr(names(outcome_list), function(model_name){
+    m <- run_model_modeltype_wnv(model_name, FE_formula)
+    
+    broom::tidy(m) %>% 
+      filter(term == "pdsi_lag0") %>% 
+      mutate(FE = fe_name,
+             model_type = model_name)
+  })
+})
+
+## plot
+fig_st_542 <- models_wnv_modtype_pdsi_coef %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS"))) %>% 
+ggplot(aes(x = FE, y = estimate, color = model_type)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, 
+                position = position_dodge(width = .6)) +
+  geom_point(size = 6.5, position = position_dodge(width = .6)) +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("log_wnv" = "#016392", #"#016392",
+                                "fepois" = "#1F9E89",  #"#C72E29",
+                                "fenegbin" = "#D87B82"), #"#098154"),
+                     labels = c("log(WNV MIR+1)", "FE Poisson", "FE NegBin")) +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate", color = "Model Type",
+       title = "WNV MIR ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 16),
+        legend.position = "bottom") 
+
+ggsave(fig_st_542, file = here("outputs", "figures", "supplement", "fig_st_542.png"), 
+       height = 5, width = 12.2,
+       dpi = 400, bg = "white")
+```
+
+### S5.4.3
+Alternative PDSI lags
+```{r}
+
+# set up lags
+pdsi_lags <- c("0-month lag" = "pdsi_lag0",
+               "1-month lag" = "pdsi_lag1",
+               "2-month lag" = "pdsi_lag2",
+               "3-month lag" = "pdsi_lag3",
+               "4-month lag" = "pdsi_lag4")
+
+FE_list <- list("cluster + month + year" = ~cluster_id + month + year,
+                "cluster + month" = ~cluster_id + month,
+                "cluster + year" = ~cluster_id + year,
+                "cluster" = ~cluster_id,
+                "OLS" = NULL)
+
+
+run_model_fe_wnv_pdsilags <- function(pdsi_var, FE_formula) {
+  
+  # RHS of regression
+  rhs <- paste(pdsi_var, "+ temp_lag0 + I(temp_lag0^2) + bird_lag0")
+  
+  if (is.null(FE_formula)) {
+    
+    # OLS (no FE)
+    fml <- as.formula(paste("log(WNV_MIR + 1) ~", rhs))
+    
+  } else {
+    
+    # FE case
+    fe_part <- paste(all.vars(FE_formula), collapse = " + ")
+    fml <- as.formula(paste("log(WNV_MIR+ 1) ~", rhs, "|", fe_part))
+  }
+  
+  feols(fml, vcov = conley(5), data = wnv_tar_panel_under101)
+}
+
+
+# run all models + extract coefficients
+models_wnv_pdsilags_coef <- purrr::map_dfr(names(FE_list), function(fe_name) {
+  
+  FE_formula <- FE_list[[fe_name]]
+  
+  purrr::map_dfr(names(pdsi_lags), function(lag_name) {
+    
+    pdsi_var <- pdsi_lags[[lag_name]]
+    
+    m <- run_model_fe_wnv_pdsilags(pdsi_var, FE_formula)
+    
+    broom::tidy(m) %>% 
+      dplyr::filter(term == pdsi_var) %>% 
+      dplyr::mutate(
+        FE = fe_name,
+        pdsi_lag = lag_name)
+  })
+})
+
+
+## plot
+
+fig_st_543 <- models_wnv_pdsilags_coef %>% 
+  filter(pdsi_lag != "4-month lag") %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS"))) %>% 
+ggplot(aes(x = FE, y = estimate, color = pdsi_lag)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, 
+                position = position_dodge(width = .6)) +
+  geom_point(size = 6.5, position = position_dodge(width = .6)) +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("#016392","#1F9E89",  "#E0AC5F","#D87B82")) +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate", color = "PDSI Lags",
+       title = "WNV MIR ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 16),
+        legend.position = "bottom") 
+
+
+ggsave(fig_st_543, file = here("outputs", "figures", "supplement", "fig_st_543.png"), 
+       height = 5, width = 12.2,
+       dpi = 400, bg = "white")
+
+```
+
+### S5.4.4
+Alternative temperature functional forms
+```{r}
+outcome <- "log(WNV_MIR + 1)"
+
+## build model
+control_list <- c("no temp" = "pdsi_lag0 + bird_lag0",
+                  "temp linear" = "pdsi_lag0 + temp_lag0 + bird_lag0",
+                  "temp quadratic" = "pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0")
+
+
+run_model_fe_wnv_tempform <- function(covariates, FE_formula){
+  
+  if (is.null(FE_formula)) {
+    
+    fml <- as.formula(paste(outcome, "~", covariates))
+    
+  } else {
+    
+    fe_vars <- all.vars(FE_formula)
+    fe_part <- paste(fe_vars, collapse = " + ")
+    
+    fml <- as.formula(paste(outcome, "~", covariates, "|", fe_part))
+  }
+  
+  feols(fml, vcov = conley(5), data = wnv_tar_panel_under101)
+}
+
+models_wnv_tempform_coef <- purrr::map_dfr(names(FE_list), function(fe_name) {
+  
+  FE_formula <- FE_list[[fe_name]]
+  
+  purrr::map_dfr(names(control_list), function(control_name) {
+    
+    covars <- control_list[[control_name]]
+    
+    m <- run_model_fe_wnv_tempform(covars, FE_formula)
+    
+    broom::tidy(m) %>% 
+      dplyr::filter(term == "pdsi_lag0") %>% 
+      dplyr::mutate(FE = fe_name,
+                    control_spec = control_name)
+  })
+})
+
+## plot
+fig_st_544 <- models_wnv_tempform_coef %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS"))) %>% 
+ggplot(aes(x = FE, y = estimate, color = control_spec)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, 
+                position = position_dodge(width = .6)) +
+  geom_point(size = 6.5, position = position_dodge(width = .6)) +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("#016392","#1F9E89","#D87B82")) +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate", color = "Controls",
+       title = "WNV MIR ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 16),
+        legend.position = "bottom") 
+
+ggsave(fig_st_544, file = here("outputs", "figures", "supplement", "fig_st_544.png"), 
+       height = 5, width = 12.2,
+       dpi = 400, bg = "white")
+```
+
+### S5.4.5
+Alternative Conley spatial cutoffs
+```{r}
+outcome <- "log(WNV_MIR + 1)"
+## build model
+conley_list <- c("1.5" = 1.5,
+                 "5" = 5,
+                 "10" = 10,
+                 "15" = 15,
+                 "20" = 20,
+                 "25" = 25)
+
+# formulate model
+run_model_fe_conley <- function(FE_formula, conley_cutoff){
+  
+  covariates <- "pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0"
+  
+  if (is.null(FE_formula)) {
+    
+    fml <- as.formula(paste(outcome, "~", covariates))
+    
+  } else {
+    
+    fe_vars <- all.vars(FE_formula)
+    fe_part <- paste(fe_vars, collapse = " + ")
+    
+    fml <- as.formula(paste(outcome, "~", covariates, "|", fe_part))
+  }
+  
+  feols(fml,
+        vcov = conley(conley_cutoff),
+        data = wnv_tar_panel_under101)
+}
+
+models_wnv_conley_coef <- purrr::map_dfr(names(FE_list), function(fe_name) {
+  
+  FE_formula <- FE_list[[fe_name]]
+  
+  purrr::map_dfr(names(conley_list), function(conley_name) {
+    
+    cutoff <- conley_list[[conley_name]]
+    
+    m <- run_model_fe_conley(FE_formula, cutoff)
+    
+    broom::tidy(m) %>% 
+      dplyr::filter(term == "pdsi_lag0") %>% 
+      dplyr::mutate(FE = fe_name,
+                    conley_km = conley_name)
+  })
+})
+
+## plot it
+fig_st_545 <- models_wnv_conley_coef  %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS")),
+         conley_km = factor(conley_km, levels = c("1.5",
+                                                  "5", 
+                                                  "10",
+                                                  "15",
+                                                  "20",
+                                                  "25"))) %>% 
+ggplot(aes(x = FE, y = estimate, color = conley_km)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, 
+                position = position_dodge(width = .6)) +
+  geom_point(size = 6.5, position = position_dodge(width = .6)) +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("#016392","#1F9E89", "#7E8C69", "#E0AC5F","#D87B82", "#B85C38")) +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate", color = "Conley SEs",
+       title = "WNV MIR ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 16),
+        legend.position = "bottom")  +
+  guides(color = guide_legend(nrow = 1))
+
+ggsave(fig_st_545, file = here("outputs", "figures", "supplement", "fig_st_545.png"), 
+       height = 5, width = 12.2,
+       dpi = 400, bg = "white")
+
+```
+
+### S5.4.6
+WNV MIR cutoffs
+```{r}
+outcome <- "log(WNV_MIR + 1)"
+covariates <- "pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0"
+
+data_list <- list(
+  full = (wnv_tar_panel_select %>% filter(WNV_MIR <= 1000)), 
+  under1000 = (wnv_tar_panel_select %>% filter(WNV_MIR < 1000)),
+  under101 = (wnv_tar_panel_select %>% filter(WNV_MIR <= 100)),
+  capped100 = wnv_tar_panel_select %>% mutate(WNV_MIR = pmin(WNV_MIR, 100)))
+
+
+run_model_modeltype_wnv <- function(model_type, FE_formula, data) {
+  
+  if (is.null(FE_formula)) {
+    
+    if(model_type == "log_wnv") {
+      feols(as.formula(paste("log(WNV_MIR + 1) ~", covariates)),
+            vcov = conley(5), data = data)
+      
+    } else if(model_type == "fepois") {
+      fepois(as.formula(paste("WNV_MIR ~", covariates)),
+             vcov = conley(5), data = data)
+      
+    } else if(model_type == "fenegbin"){
+      fenegbin(as.formula(paste("WNV_MIR ~", covariates)),
+               vcov = conley(5), data = data)
+    }
+    
+  } else {
+    
+    fe_vars <- all.vars(FE_formula)
+    fe_part <- paste(fe_vars, collapse = " + ")
+    
+    if(model_type == "log_wnv") {
+      feols(as.formula(paste("log(WNV_MIR + 1) ~", covariates, "|", fe_part)),
+            vcov = conley(5), data = data)
+      
+    } else if(model_type == "fepois") {
+      fepois(as.formula(paste("WNV_MIR ~", covariates, "|", fe_part)),
+             vcov = conley(5), data = data)
+      
+    } else if(model_type == "fenegbin"){
+      fenegbin(as.formula(paste("WNV_MIR ~", covariates, "|", fe_part)),
+               vcov = conley(5), data = data)
+    }
+  }
+}
+
+results <- map_dfr(names(data_list), function(data_name) {
+  
+  data <- data_list[[data_name]]
+  
+  map_dfr(names(FE_list), function(fe_name) {
+    
+    FE_formula <- FE_list[[fe_name]]
+    
+    map_dfr(names(outcome_list), function(model_name) {
+      
+      m <- run_model_modeltype_wnv(model_name, FE_formula, data)
+      
+      broom::tidy(m) %>%
+        filter(term == "pdsi_lag0") %>%
+        mutate(FE = fe_name,
+               model_type = model_name,
+               sample = data_name)
+    })
+  })
+})
+
+
+## plot
+fig_st_546 <- results %>% 
+  mutate(FE = factor(FE, levels = c("cluster + month + year",
+                                    "cluster + year",
+                                    "cluster + month",
+                                    "cluster",
+                                    "OLS")),
+        sample = factor(sample, levels = c("full", 
+                                           "under1000",
+                                           "under101", 
+                                           "capped100"),
+                        labels = c("≤ 1000",
+                                   "< 1000", 
+                                   "≤ 100",
+                                   "cap at 100"))) %>% 
+ggplot(aes(x = sample, y = estimate, color = model_type)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error,
+                    ymax =  estimate + 1.96*std.error), width = .15, linewidth = 2, 
+                position = position_dodge(width = .6)) +
+  geom_point(size = 6.5, position = position_dodge(width = .6)) +
+  geom_hline(yintercept = 0, linetype = "dashed",linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("log_wnv" = "#016392", #"#016392",
+                                "fepois" = "#1F9E89",  #"#C72E29",
+                                "fenegbin" = "#D87B82"), #"#098154"),
+                     labels = c("log(WNV MIR+1)", "FE Poisson", "FE NegBin")) +
+  theme_minimal(base_size = 18) + 
+  labs(x = "Fixed Effects", y = "Coefficient Estimate", color = "Model Type",
+       title = "WNV MIR ~ PDSI + Controls + FE") +
+  theme(axis.title = element_text(face = "bold"),
+        axis.text.x = element_text(size = 19),
+        axis.text.y = element_text(size = 19),
+        panel.grid.minor = element_blank(),
+        legend.text = element_text(size = 15),
+        legend.title = element_text(size = 16),
+        legend.position = "bottom") +
+  facet_wrap(~FE, nrow = 3)
+
+ggsave(fig_st_546, file = here("outputs", "figures", "supplement", "fig_st_546.png"), 
+       height = 7, width = 12.2,
+       dpi = 400, bg = "white")
+
+
+```
+
+### S4.5
+Supporting figures - histogram
+```{r}
+### WITH ZERO
+raw_wnv <- wnv_tar_panel_under101 %>% 
+  ggplot(aes(x = WNV_MIR)) +
+  geom_histogram(fill = "#007fff", color = "#606372") + #"#79A8A4"
+  labs(x = "Number of trap stations per cluster", y = "Count of clusters") +
+  ggtitle("Raw Distribution") +
+  theme(axis.title = element_text(size = 14, face = "bold")) +
+  theme_minimal(base_size = 18) +
+  labs(x = "",y = "Count") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.position = "none") 
+
+
+log_wnv <- wnv_tar_panel_under101 %>% 
+  ggplot(aes(x = log(WNV_MIR+1))) +
+  geom_histogram(fill = "#007fff", color = "#606372") + #"#79A8A4"
+  labs(x = "Number of trap stations per cluster", y = "Count of clusters") +
+  ggtitle("Log-transformed Distribution") +
+  theme(axis.title = element_text(size = 14, face = "bold")) +
+  theme_minimal(base_size = 18) +
+  labs(x = "",y = "Count") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.position = "none") 
+
+## combine both
+hist_both_wnv <- ggarrange(raw_wnv + rremove("xlab"), log_wnv + rremove("ylab") + rremove("xlab"), common.legend = TRUE)
+
+hist_both_an_wnv <- annotate_figure(hist_both_wnv, 
+                                bottom = text_grob("WNV Minimum Infection Rate", size = 18, face = "bold"))
+
+
+
+### WITHOUT ZERO
+raw_wnv_no0 <- wnv_tar_panel_under101 %>% 
+  filter(WNV_MIR != 0) %>% 
+  ggplot(aes(x = WNV_MIR)) +
+  geom_histogram(fill = "#007fff", color = "#606372") + #"#79A8A4"
+  labs(x = "Number of trap stations per cluster", y = "Count of clusters",subtitle = "Non-Zero observations") +
+  ggtitle("Raw Distribution") +
+  theme(axis.title = element_text(size = 14, face = "bold")) +
+  theme_minimal(base_size = 18) +
+  labs(x = "",y = "Count") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.position = "none") 
+
+
+log_wnv_no0 <- wnv_tar_panel_under101 %>%
+  filter(WNV_MIR != 0) %>% 
+  ggplot(aes(x = log(WNV_MIR+1))) +
+  geom_histogram(fill = "#007fff", color = "#606372") + #"#79A8A4"
+  labs(x = "Number of trap stations per cluster", y = "Count of clusters",subtitle = "Non-Zero observations") +
+  ggtitle("Log-transformed Distribution") +
+  theme(axis.title = element_text(size = 14, face = "bold")) +
+  theme_minimal(base_size = 18) +
+  labs(x = "",y = "Count") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.position = "none") 
+
+## combine both
+hist_both_wnv_no0 <- ggarrange(raw_wnv_no0 + rremove("xlab"), log_wnv_no0 + rremove("ylab") + rremove("xlab"), common.legend = TRUE)
+
+hist_both_an_wnv_no0 <- annotate_figure(hist_both_wnv_no0, 
+                                bottom = text_grob("WNV Minimum Infection Rate", size = 18, face = "bold"))
+
+
+hist_both_an_wnv_0no0 <- (hist_both_an_wnv/hist_both_an_wnv_no0)
+ggsave(hist_both_an_wnv_0no0, file = here("outputs", "figures", "supplement", "fig_st_55_hist.png"), 
+        height = 8, width = 12,
+       dpi = 400, bg = "white")
+```
+
+Supporting figures - marginal effects plots
+```{r}
+######## PDSI
+# Create grid of PDSI values
+pdsi_seq <- seq(min(wnv_tar_panel_under101$pdsi_lag0, na.rm = TRUE), 
+                max(wnv_tar_panel_under101$pdsi_lag0, na.rm = TRUE), 
+                length.out = 100)
+
+# Mean temperature for holding constant
+mean_temp <- mean(wnv_tar_panel_under101$temp_lag0, na.rm = TRUE)
+mean_bird <- mean(wnv_tar_panel_under101$bird_lag0, na.rm = TRUE)
+
+# Use predict from fixest with se.fit = TRUE
+pred <- predict(mod_fe_wnv_pdsi_csw[[1]], 
+                newdata = data.frame(pdsi_lag0 = pdsi_seq,
+                                     temp_lag0 = mean_temp,
+                                     bird_lag0 = mean_bird),
+                se.fit = TRUE, type = "response") 
+
+# Build dataframe for plotting
+plot_df <- data.frame(pdsi = pdsi_seq, fit = pred$fit,
+                      lower = pred$fit - 1.96 * pred$se.fit, upper = pred$fit + 1.96 * pred$se.fit)
+
+# Plot predicted effect
+mod_ols_wnv_pdsi_ME <- ggplot(plot_df, aes(x = pdsi, y = fit)) +
+  geom_line(size = 1.3, color = "#007fff") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, fill = "#007fff") +
+  labs(x = "Palmer Drought Severity Index (PDSI)", 
+       y = "Predicted log(WNV MIR + 1)") +
+  theme_minimal(base_size = 13) +
+  theme_classic() +
+  scale_x_continuous(expand = c(0,0)) +
+  theme(axis.title = element_text(face = "bold", size = 13),
+        axis.text = element_text(size = 12))
+
+######## TEMP^2
+# Create grid of TEMP^2 values
+temp_seq <- seq(min(wnv_tar_panel_under101$temp_lag0, na.rm = TRUE), 
+                max(wnv_tar_panel_under101$temp_lag0, na.rm = TRUE), 
+                length.out = 100)
+
+temp_raw_seq <- seq(min(wnv_tar_panel_under101$temp_raw, na.rm = TRUE), 
+                max(wnv_tar_panel_under101$temp_raw, na.rm = TRUE), 
+                length.out = 100)
+
+# Mean pdsi for holding constant
+mean_pdsi <- mean(wnv_tar_panel_under101$pdsi_lag0, na.rm = TRUE)
+mean_bird <- mean(wnv_tar_panel_under101$bird_lag0, na.rm = TRUE)
+
+# Use predict from fixest with se.fit = TRUE
+pred <- predict(mod_fe_wnv_pdsi_csw[[1]], 
+                newdata = data.frame(pdsi_lag0 = mean_pdsi,
+                                     temp_lag0 = temp_seq,
+                                     bird_lag0 = mean_bird),
+                se.fit = TRUE, type = "response") 
+
+# Build dataframe for plotting
+plot_df <- data.frame(temp_C = temp_raw_seq, fit = pred$fit,
+                      lower = pred$fit - 1.96 * pred$se.fit, upper = pred$fit + 1.96 * pred$se.fit)
+
+
+mod_ols_wnv_temp_ME <- ggplot(plot_df, aes(x = temp_C, y = fit)) +
+  geom_line(size = 1.3, color = "#007fff") +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, fill = "#007fff") +
+  labs(x = "Temperature (°C)", 
+       y = "Predicted WNV MIR") +
+  theme_minimal(base_size = 13) +
+  theme_classic() +
+  scale_x_continuous(expand = c(0,0)) +
+  theme(axis.title = element_text(face = "bold", size = 13),
+        axis.text = element_text(size = 12))
+
+ggsave(mod_ols_wnv_temp_ME, file = here("outputs", "figures", "supplement", "fig_st_55_METemp.png"), 
+       height = 3, width = 4,
+       dpi = 400, bg = "white")
+
+
+
+######## Bird INDEX
+######## BIRD marginal effect plot
+
+# Create grid of standardized bird values
+bird_seq <- seq(
+  min(wnv_tar_panel_under101$bird_lag0, na.rm = TRUE), 
+  max(wnv_tar_panel_under101$bird_lag0, na.rm = TRUE), 
+  length.out = 100
+)
+
+# Matching raw bird composition values for plotting
+bird_raw_seq <- seq(
+  min(wnv_tar_panel_under101$bird_raw, na.rm = TRUE), 
+  max(wnv_tar_panel_under101$bird_raw, na.rm = TRUE), 
+  length.out = 100
+)
+
+# Hold other covariates constant
+mean_pdsi <- mean(wnv_tar_panel_under101$pdsi_lag0, na.rm = TRUE)
+mean_temp <- mean(wnv_tar_panel_under101$temp_lag0, na.rm = TRUE)
+
+# Predictions
+pred <- predict(
+  mod_fe_wnv_pdsi_csw[[1]], 
+  newdata = data.frame(
+    pdsi_lag0 = mean_pdsi,
+    temp_lag0 = mean_temp,
+    bird_lag0 = bird_seq
+  ),
+  se.fit = TRUE,
+  type = "response"
+)
+
+# Build dataframe
+plot_df <- data.frame(
+  bird_raw = bird_raw_seq,
+  fit = pred$fit,
+  lower = pred$fit - 1.96 * pred$se.fit,
+  upper = pred$fit + 1.96 * pred$se.fit)
+
+
+# Plot
+mod_ols_wnv_bird_ME <- ggplot(plot_df, aes(x = bird_raw, y = fit)) +
+  geom_line(size = 1.3, color = "#007fff") +
+  geom_ribbon(aes(ymin = lower, ymax = upper),
+              alpha = 0.2,
+              fill = "#007fff") +
+  labs(x = "Bird Community Competence",  y = "Predicted WNV MIR") +
+  theme_minimal(base_size = 13) +
+  theme_classic() +
+  scale_x_continuous(expand = c(0,0)) +
+  theme(
+    axis.title = element_text(face = "bold", size = 13),
+    axis.text = element_text(size = 12))
+
+ggsave(mod_ols_wnv_bird_ME, file = here("outputs", "figures", "supplement", "fig_st_55_MEBird.png"), 
+       height = 3, width = 4,
+       dpi = 400, bg = "white")
+
+
+fig_st_55_ME_both <- (mod_ols_wnv_temp_ME + mod_ols_wnv_bird_ME)
+
+ggsave(fig_st_55_ME_both, file = here("outputs", "figures", "supplement", "fig_st_55_MEboth.png"), 
+       height = 3, width = 8,
+       dpi = 400, bg = "white")
+```
+
+
+# Spatial Heterogeneity of PDSI
+
+## Text S6
+
+### Abundance
+### S6.1
+Model summary
+```{r}
+# build model
+mod_fe_abund_pdsi_HR <- feols(log(mos_per_trap_night + 1) ~ i(hydro_region, pdsi_lag0) + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_tar_panel_select)
+
+# check summary
+summary(mod_fe_abund_pdsi_HR)
+confint(mod_fe_abund_pdsi_HR, level = 0.95)
+
+# look at table
+etable(mod_fe_abund_pdsi_HR)
+
+
+# clean up
+broom::tidy(mod_fe_abund_pdsi_HR) %>% 
+  mutate(across(where(is.numeric), ~ round(., 2)))
+```
+
+Plot county level effects
+```{r}
+# build model
+mod_fe_abund_pdsi_county <- feols(log(mos_per_trap_night + 1) ~ i(county, pdsi_lag0) + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_tar_panel_select)
+
+
+## make tidy
+abund_pdsi_county_coef <- broom::tidy(mod_fe_abund_pdsi_county) %>% 
+  filter(grepl("county::", term)) %>% 
+  mutate(county = gsub("county::", "", term),
+         county = gsub(":pdsi_lag0", "", county),
+         lower = estimate - 1.96 * std.error,
+         upper = estimate + 1.96 * std.error) %>% 
+  left_join(county_to_hr, by = "county")
+
+## plot
+fig_st_61 <- abund_pdsi_county_coef %>% 
+  mutate(county = reorder(county, -estimate)) %>% 
+  ggplot(aes(x = county, y = estimate, color = hydro_region)) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),width = 0.35, linewidth = 2,
+                position = position_dodge(width = 0.65)) +
+  geom_point(size = 6.5,position = position_dodge(width = 0.65)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005" )) +
+  theme_minimal(base_size = 18) +
+  labs(x = "",y = "Effect of PDSI", color = "Hydrological Region") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right") +
+  coord_flip() +
+  ggtitle("Abundance")
+
+
+ggsave(fig_st_61, file = here("outputs", "figures", "supplement", "fig_st_61.png"), 
+       height = 7, width = 10,
+       dpi = 400, bg = "white")
+```
+
+
+### WNV MIR
+### S6.2
+Model summary
+```{r}
+# build model
+mod_fe_wnv_pdsi_HR <- feols(log(WNV_MIR + 1) ~ i(hydro_region, pdsi_lag0) + temp_lag0 + I(temp_lag0^2) + bird_lag0 |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = wnv_tar_panel_under101)
+
+# check summary
+summary(mod_fe_wnv_pdsi_HR)
+confint(mod_fe_wnv_pdsi_HR, level = 0.95)
+
+# look at table
+etable(mod_fe_wnv_pdsi_HR)
+
+
+# clean up
+broom::tidy(mod_fe_wnv_pdsi_HR) %>% 
+  mutate(across(where(is.numeric), ~ round(., 2)))
+```
+
+Plot county level effects
+```{r}
+# build model
+mod_fe_wnv_pdsi_county <- feols(log(WNV_MIR + 1) ~ i(county, pdsi_lag0) + temp_lag0 + I(temp_lag0^2) + bird_lag0 |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = wnv_tar_panel_under101)
+
+
+## make tidy
+wnv_pdsi_county_coef <- broom::tidy(mod_fe_wnv_pdsi_county) %>% 
+  filter(grepl("county::", term)) %>% 
+  mutate(county = gsub("county::", "", term),
+         county = gsub(":pdsi_lag0", "", county),
+         lower = estimate - 1.96 * std.error,
+         upper = estimate + 1.96 * std.error) %>% 
+  left_join(county_to_hr, by = "county")
+
+## plot
+fig_st_62 <- wnv_pdsi_county_coef %>% 
+  mutate(county = reorder(county, -estimate)) %>% 
+  ggplot(aes(x = county, y = estimate, color = hydro_region)) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),width = 0.35, linewidth = 2,
+                position = position_dodge(width = 0.65)) +
+  geom_point(size = 6.5,position = position_dodge(width = 0.65)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005" )) +
+  theme_minimal(base_size = 18) +
+  labs(x = "",y = "Effect of PDSI", color = "Hydrological Region") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right") +
+  coord_flip() +
+  ggtitle("WNV MIR")
+
+
+ggsave(fig_st_62, file = here("outputs", "figures", "supplement", "fig_st_62.png"), 
+       height = 7, width = 10,
+       dpi = 400, bg = "white")
+```
+
+## S7.1
+Abundance ~ HVs
+```{r}
+
+both_hydro_coef <- read.csv(here("outputs", "models", "both_hydro_coef.csv"))
+
+
+both_hydro_coef %>% 
+  filter(outcome == "Abundance") %>% 
+  #filter(lag == "3 mo") %>% 
+  mutate(sig = case_when(p.value < 0.001 ~ "***",
+                         p.value < 0.01  ~ "**",
+                         p.value < 0.05  ~ "*",TRUE ~ "")) %>% 
+  dplyr::select(hydro_var, lag, estimate, std.error,sig) %>% 
+  mutate(across(where(is.numeric), ~ round(., 3)))
+
+
+```
+
+## S8.1
+WNV MIR ~ HVs
+```{r}
+
+#both_hydro_coef <- read.csv(here("outputs", "models", "both_hydro_coef.csv"))
+
+
+both_hydro_coef %>% 
+  filter(outcome == "WNV MIR") %>% 
+  #filter(lag == "3 mo") %>% 
+  mutate(sig = case_when(p.value < 0.001 ~ "***",
+                         p.value < 0.01  ~ "**",
+                         p.value < 0.05  ~ "*",TRUE ~ "")) %>% 
+  dplyr::select(hydro_var, lag, estimate, std.error,sig) %>% 
+  mutate(across(where(is.numeric), ~ round(., 3)))
+
+## plot 5 vs 10 km buffer
+hydro_colors <- c(  
+  "Soil Moisture" =     "#D3105C" , 
+  "Evapotranspiration" = "#3A5D3D",
+  "Standing Water" =  "#4C4976",
+  "Standing Water (10km)" = "#D87B82")
+
+lag_alpha <- c("0 mo" = 1,
+               "1 mo" = 0.75,
+               "2 mo" = 0.55,
+               "3 mo" = 0.35)
+
+fig_st_72 <- 
+  both_hydro_coef %>% 
+  filter(hydro_var == "Standing Water (10km)" |
+           hydro_var == "Standing Water") %>% 
+  ggplot(aes(x = outcome, y = estimate, color = hydro_var, alpha = lag)) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),width = 0.35, linewidth = 2,
+                position = position_dodge(width = 0.65)) +
+  geom_point(size = 4.5,position = position_dodge(width = 0.65)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c(hydro_colors)) +
+  scale_alpha_manual(values = lag_alpha) +
+  theme_minimal(base_size = 18) +
+  labs(x = "",y = "Coefficient Estimate", alpha = "Month Lag") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.title = element_text(face = "bold"),
+    legend.position = "bottom",
+    strip.text = element_text(face = "bold", size = 20)) +
+  facet_wrap(~hydro_var, ncol = 2) +
+  guides(color = FALSE) 
+
+
+ggsave(fig_st_72, file = here("outputs", "figures", "supplement", "fig_st_72.png"), 
+       height = 4, width = 8,
+       dpi = 400, bg = "white")
+```
+
+
+(sensitivity checks)
+
+## S8.1.2
+Alternative vector species
+
+### Abundance
+format data
+```{r}
+
+## already have
+# abund_tar_panel_select. 
+
+## upload covariate data
+station_covariates_full <- read.csv(here("data" ,"interim", "covariates_scalelag_stationmeta.csv"))
+
+station_covariates_filtered <- station_covariates_full %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month)) 
+
+
+### PIP
+## upload culex pipiens data
+abund_pip_panel_full <- read.csv(here("data", "interim", "abundance_pip_cluster.csv"))
+
+abund_pip_panel_filtered <- abund_pip_panel_full %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::rename(year = surv_year) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month))
+
+## combine
+abund_pip_panel_select <- abund_pip_panel_filtered %>% 
+  left_join(station_covariates_filtered %>% dplyr::select(-county), by = c("cluster_id", "year", "month"))
+
+
+### QUINQ
+## upload culex quinq data
+abund_quin_panel_full <- read.csv(here("data", "interim", "abundance_quin_cluster.csv"))
+
+abund_quin_panel_filtered <- abund_quin_panel_full %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::rename(year = surv_year) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month))
+## combine
+abund_quin_panel_select <- abund_quin_panel_filtered %>% 
+  left_join(station_covariates_filtered %>% dplyr::select(-county), by = c("cluster_id", "year", "month"))
+
+```
+
+run models
+```{r}
+### TAR
+# build model
+mod_fe_abund_pdsi_tar <- feols(log(mos_per_trap_night + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_tar_panel_select)
+
+# check summary
+summary(mod_fe_abund_pdsi_tar)
+confint(mod_fe_abund_pdsi_tar, level = 0.95)
+etable(mod_fe_abund_pdsi_tar)
+
+
+### PIP
+# build model
+mod_fe_abund_pdsi_pip <- feols(log(mos_per_trap_night + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_pip_panel_select)
+
+# check summary
+summary(mod_fe_abund_pdsi_pip)
+confint(mod_fe_abund_pdsi_pip, level = 0.95)
+etable(mod_fe_abund_pdsi_pip)
+
+
+### QUIN
+mod_fe_abund_pdsi_quin <- feols(log(mos_per_trap_night + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_quin_panel_select)
+
+# check summary
+summary(mod_fe_abund_pdsi_quin)
+confint(mod_fe_abund_pdsi_quin, level = 0.95)
+etable(mod_fe_abund_pdsi_quin)
+```
+
+### WNV MIR
+format data
+```{r}
+
+## already have
+# wnv_tar_panel_under101 
+
+
+### PIP
+## upload culex pipiens data
+wnv_pip_panel_full <- read.csv(here("data", "interim", "wnv_pip_cluster.csv"))
+
+wnv_pip_panel_filtered <- wnv_pip_panel_full %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::rename(year = surv_year) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month))
+
+## combine
+wnv_pip_panel_select <- wnv_pip_panel_filtered %>% 
+  left_join(station_covariates_filtered %>% dplyr::select(-county), by = c("cluster_id", "year", "month"))
+
+wnv_pip_panel_under101 <- wnv_pip_panel_select %>% # 36,478 observations
+  filter(WNV_MIR < 101)
+
+### QUINQ
+## upload culex quinq data
+wnv_quin_panel_full <- read.csv(here("data", "interim", "wnv_quin_cluster.csv"))
+
+wnv_quin_panel_filtered <- wnv_quin_panel_full %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::rename(year = surv_year) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month))
+## combine
+wnv_quin_panel_select <- wnv_quin_panel_filtered %>% 
+  left_join(station_covariates_filtered %>% dplyr::select(-county), by = c("cluster_id", "year", "month"))
+
+wnv_quin_panel_under101 <- wnv_quin_panel_select %>% # 36,478 observations
+  filter(WNV_MIR < 101)
+```
+
+run models
+```{r}
+### TAR
+# build model
+mod_fe_wnv_pdsi_tar <- feols(log(WNV_MIR + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0 |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = wnv_tar_panel_under101)
+
+# check summary
+summary(mod_fe_wnv_pdsi_tar)
+confint(mod_fe_wnv_pdsi_tar, level = 0.95)
+etable(mod_fe_wnv_pdsi_tar)
+
+
+### PIP
+# build model
+mod_fe_wnv_pdsi_pip <- feols(log(WNV_MIR + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0 |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = wnv_pip_panel_under101)
+
+# check summary
+summary(mod_fe_wnv_pdsi_pip)
+confint(mod_fe_wnv_pdsi_pip, level = 0.95)
+etable(mod_fe_wnv_pdsi_pip)
+
+
+### QUIN
+mod_fe_wnv_pdsi_quin <- feols(log(WNV_MIR + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0 |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = wnv_quin_panel_under101)
+
+# check summary
+summary(mod_fe_wnv_pdsi_quin)
+confint(mod_fe_wnv_pdsi_quin, level = 0.95)
+etable(mod_fe_wnv_pdsi_quin)
+```
+
+## S8.1.2
+Spatial units outside alluvial boundary
+
+### Abundance
+```{r}
+## format data
+station_covariates_full2 <- station_covariates_full%>% 
+  filter(month %in% 4:10) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month)) 
+
+### TAR
+#abund_tar_panel_select
+
+abund_tar_panel_outside <- abund_tar_panel_full %>% 
+    filter(county == "Riverside" | county == "Los Angeles" | county == "Orange" | county == "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::rename(year = surv_year) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month)) %>% 
+  left_join(station_covariates_full2 %>% dplyr::select(-county), by = c("cluster_id", "year", "month"))
+
+#unique(abund_tar_panel_outside$county)
+```
+
+run models
+```{r}
+### within boundary
+# build model
+mod_fe_abund_pdsi_tar <- feols(log(mos_per_trap_night + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_tar_panel_select)
+
+# check summary
+summary(mod_fe_abund_pdsi_tar)
+confint(mod_fe_abund_pdsi_tar, level = 0.95)
+etable(mod_fe_abund_pdsi_tar)
+
+
+### outside boundary
+### TAR
+# build model
+mod_fe_abund_pdsi_tar_outside <- feols(log(mos_per_trap_night + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_tar_panel_outside)
+
+# check summary
+summary(mod_fe_abund_pdsi_tar_outside)
+confint(mod_fe_abund_pdsi_tar_outside, level = 0.95)
+etable(mod_fe_abund_pdsi_tar_outside)
+
+```
+
+
+## S8.2
+Measurement uncertainty - need to do this!
+```{r}
+
+
+```

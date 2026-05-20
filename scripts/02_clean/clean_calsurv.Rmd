@@ -1,0 +1,115 @@
+---
+title: "clean calsurv survey"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+## upload packages
+library(tidyverse)
+library(lubridate)
+
+## upload data
+
+# abundance
+abundance_0316_raw <- read_csv(here("data", "raw", "restricted", "main", "data-000092_abundance_2003-16.csv"))
+abundance_1723_raw <- read_csv(here("data", "raw", "restricted", "main", "data-000092_abundance_2017-23.csv"))
+abundance_sutter_raw <- read_csv(here("data", "raw", "restricted", "sutter", "data-000098_abundance.csv"))
+
+# WNV MIR
+wnv_main_raw <- read_csv(here("data", "raw", "restricted", "main", "data-000092_pool_2003-23.csv"))
+wnv_sutter_raw <- read_csv(here("data", "raw", "restricted", "sutter", "data-000098_pools.csv"))
+```
+
+# Abundance
+
+## Make function to clean up abundance data
+```{r}
+
+clean_abundance <- function(df) {
+
+  df %>%
+    # filter based on observation type
+    filter(species != "NULL") %>%
+    filter(collection_type == "abundance") %>%
+    filter(trap_problem_bit != TRUE) %>%
+    filter(grepl("Females", sex)) %>%
+
+    # clean up any potential characters
+    mutate(num_clean = as.numeric(gsub("[^0-9]", "", num_count))) %>%
+
+    # fix the date
+    mutate(date = as.Date(substr(collection_date, 1, 10)),
+      week = lubridate::isoweek(date),
+      trapstation_id = paste0( sprintf("%.5f", latitude), "-", sprintf("%.5f", longitude))) %>%
+
+    # slim down the dataset
+    dplyr::select(trapstation_id, collection_id, county,
+                  date, month, week, surv_year,
+                  latitude, longitude,
+                  species,
+                  trap_nights, num_clean)
+}
+
+
+```
+
+## Apply it
+```{r}
+abundance_0316_clean <- clean_abundance(abundance_0316_raw)
+abundance_1723_clean <- clean_abundance(abundance_1723_raw)
+abundance_sutter_clean <- clean_abundance(abundance_sutter_raw)
+```
+
+## Save the files
+```{r}
+write_csv(abundance_0316_clean, here("data", "interim", "abundance_0316_clean.csv"))
+write_csv(abundance_1723_clean, here("data", "interim", "abundance_1723_clean.csv"))
+write_csv(abundance_sutter_clean, here("data", "interim", "abundance_sutter_clean.csv"))
+
+```
+
+
+# WNV MIR
+## Make function to clean up wnv mir data
+```{r}
+
+clean_wnv <- function(df) {
+
+  df %>%
+    # filter based on observation type
+    filter(test_status == "Confirmed" | test_status == "Negative") %>%
+    filter(grepl("Females", sex)) %>%
+
+    # clean up any potential characters
+    mutate(num_clean = as.numeric(gsub("[^0-9]", "", num_count))) %>%
+
+    # fix the date
+    mutate(date = as.Date(substr(collection_date, 1, 10)),
+      week = lubridate::isoweek(date),
+      trapstation_id = paste0( sprintf("%.5f", latitude), "-", sprintf("%.5f", longitude))) %>%
+
+    # slim down the dataset
+    dplyr::select(trapstation_id, pool_id, county,
+                  date, month, week, surv_year,
+                  latitude, longitude,
+                  species,
+                  num_clean, test_target, test_status)
+}
+
+
+```
+
+## Apply it
+```{r}
+wnv_main_clean <- clean_wnv(wnv_main_raw)
+wnv_sutter_clean <- clean_wnv(wnv_sutter_raw)
+```
+
+## Save the files
+```{r}
+write_csv(wnv_main_clean, here("data", "interim", "wnv_main_clean.csv"))
+write_csv(wnv_sutter_clean, here("data", "interim", "wnv_sutter_clean.csv"))
+
+```
+

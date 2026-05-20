@@ -1,0 +1,534 @@
+---
+title: "download_covariates"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+## upload packages
+library(here)
+library(readr)
+library(googledrive)
+library(sf)
+library(tigris)
+library(remotes)
+#remotes::install_github("mikejohnson51/climateR")
+#library(climateR)
+library(stringr)
+library(terra)
+#remotes::install_git("https://gitlabext.wsl.ch/karger/rchelsa.git")
+#library(Rchelsa)
+library(purrr)
+library(lubridate)
+library(tidyr)
+library(tidyverse)
+library(data.table)
+
+## upload cluster information
+cluster_shp <- st_read(here("data", "spatial_boundaries", "cluster_all_polygon.shp"))
+cluster_info <- read.csv(here("data", "interim", "cluster_all_info.csv"))
+
+## upload california boundaries
+options(tigris_use_cache = TRUE)
+ca_shp <- tigris::counties("ca", class = "sf")
+```
+
+# Covariate 1. PDSI
+```{r}
+# make AOI
+cluster_shp_84 <- st_transform(cluster_shp, 4326)
+
+# pull down data
+pdsi_data <- getGridMET(AOI = cluster_shp_84,
+                        varname = "pdsi",
+                        startDate = "2003-01-01",
+                        endDate = "2023-12-31")
+# call out pdsi values
+pdsi_rast <- pdsi_data$daily_mean_palmer_drought_severity_index
+
+# convert clusters to vect
+cluster_vect <- vect(cluster_shp)
+
+# extract average pdsi value within cluster polygon 
+pdsi_extract <- terra::extract(pdsi_rast, cluster_vect, fun = mean, weights = TRUE, na.rm = TRUE, bind = TRUE)
+
+# turn into tidy dataframe
+pdsi_df <- as.data.frame(pdsi_extract) %>% 
+  pivot_longer(cols = starts_with("pdsi_"),
+               names_to = "date",
+               values_to = "pdsi") %>% 
+  mutate(date = as.Date(str_remove(date, "pdsi_"), format = "%Y.%m.%d"),
+         year = format(date, "%Y"),
+         month = format(date, "%m"))  %>% 
+  mutate(year = as.integer(year),
+         month = as.integer(month)) %>% 
+  dplyr::select(cluster_id, year, month, pdsi) %>% 
+  #group_by(cluster_id, year, month) %>% 
+  summarise(pdsi = mean(pdsi, na.rm = TRUE), .by = c(cluster_id, year, month))
+
+# save as indiviudal file 
+#write.csv(pdsi_df, here("data", "interim", "covariate_pdsi_cluster.csv"))
+```
+
+
+# Covariate 2. Temperature
+## Monthly data (2003-2021)
+(lives on my google drive)
+```{r}
+## list chelsa files
+chelsa_files <- drive_ls("temperature/CHELSA_tas_ca") %>%
+  filter(grepl("\\.tif$", name)) %>%
+  mutate(year_month = str_extract(name, "\\d{2}_\\d{4}"),
+    month = as.integer(str_extract(year_month, "^\\d{2}")),
+    year  = as.integer(str_extract(year_month, "\\d{4}")))
+
+## download once in temp folder
+out_dir <- "chelsa_monthly_tmp"
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+local_paths <- vector("character", nrow(chelsa_files))
+
+for (i in seq_len(nrow(chelsa_files))) {
+  
+  f <- chelsa_files[i, ]
+  path <- file.path(out_dir, f$name)
+  
+  if (!file.exists(path)) {
+    drive_download(file = f$id,
+                   path = path,
+                   overwrite = TRUE)
+  }
+  
+  local_paths[i] <- path
+}
+
+## stack em
+r_stack <- rast(local_paths)
+
+## check the crs
+cluster_vect <- vect(st_transform(cluster_shp, crs(r_stack)))
+
+## extract temp means
+temp_monthly_vals <- terra::extract(r_stack, cluster_vect, fun = mean, na.rm = TRUE)
+
+
+
+## reshape to final df
+# correct ID
+temp_monthly_vals$cluster_id <- cluster_shp$cluster_id[temp_monthly_vals$ID]
+temp_monthly_vals <- temp_monthly_vals[,-1]
+
+# make long
+chelsa_cluster_monthly_long <- temp_monthly_vals %>%
+  pivot_longer(cols = -cluster_id,
+    names_to = "layer",
+    values_to = "temp_K") %>%
+  mutate(temp_C = temp_K - 273.15) %>%
+  dplyr::select(-temp_K)
+
+# create identifiers
+meta <- chelsa_files %>%
+  mutate(layer = name) %>%
+  transmute(layer,year,month)
+
+# clean up
+temp_month_df <- chelsa_cluster_monthly_long %>% 
+  left_join(meta, by = "layer") %>% 
+  mutate(year = substr(layer, 15,18),
+         month = substr(layer, 12,13))  %>% 
+  mutate(year = as.integer(year),
+         month = as.integer(month)) %>% 
+  dplyr::select(cluster_id, year, month, temp_C)
+
+#write.csv(temp_month_df, here("data", "interim", "covariate_temp_pre2021_cluster.csv"))
+```
+
+## Daily data (2022,2023)
+I need to aggregate to monthly but can use the chelsa wrapper
+```{r}
+## correct spatial extent
+ca <- st_transform(ca_shp, 4326)
+cluster_vect <- vect(st_transform(cluster_shp, 4326))
+ca_extent <- st_bbox(ca)
+
+years <- 2022:2023 # only need data for 2022-2023
+
+results <- list() # store results
+
+for (y in years) {
+
+  for (m in 1:12) {
+
+    month_start <- as.Date(sprintf("%04d-%02d-01", y, m))
+    month_end   <- ceiling_date(month_start, "month") - days(1)
+
+    message("processing: ", format(month_start, "%Y-%m"))
+
+    ## download chelsa data
+    chelsa_daily <- tryCatch({
+
+      getChelsa(var = "tas",
+        extent = c(ca_extent["xmin"],
+                   ca_extent["xmax"],
+                   ca_extent["ymin"],
+                   ca_extent["ymax"]),
+        startdate = month_start,
+        enddate   = month_end,
+        dataset   = "chelsa-daily")
+
+    }, error = function(e) {
+
+      message("failed: ", format(month_start, "%Y-%m"))
+      message(e$message)
+
+      return(NULL)
+    })
+
+    # skip if nothing downloaded
+    if (is.null(chelsa_daily)) next
+
+    ## there are days with missing data so just skip & avg whats there within the month
+    n_layers <- nlyr(chelsa_daily)
+
+    if (n_layers == 0) {
+      message("no layers found")
+      next
+    }
+
+    ## create available dates only
+    available_dates <- seq.Date(month_start, by = "day", length.out = n_layers)
+
+    names(chelsa_daily) <- as.character(available_dates) # fix names
+
+    ## calc monthly mean
+    monthly_raster <- terra::mean(chelsa_daily, na.rm = TRUE)
+
+    names(monthly_raster) <- format(month_start, "%Y-%m")  # fix names
+
+    ## extract cluster mean
+    vals <- terra::extract(monthly_raster, cluster_vect, fun = mean, na.rm = TRUE)
+
+    ## convert temp to C
+    # CHECK FIRST:
+    # plot(monthly_raster)
+
+    mean_val <- global(monthly_raster, mean, na.rm = TRUE)[1,1]
+
+    # if Kelvin convert to C
+    if (mean_val > 100) {
+      vals[,2] <- vals[,2] - 273.15
+    }
+
+    ## store output
+    results[[length(results) + 1]] <- data.frame(
+      cluster_id = cluster_shp$cluster_id,
+      year       = y,
+      month      = m,
+      year_month = format(month_start, "%Y-%m"),
+      temp_C     = vals[,2])
+
+    rm(chelsa_daily, monthly_raster, vals) # remove from comp
+
+    gc()
+  }
+}
+
+# combine
+chelsa_cluster_monthly_2223 <- bind_rows(results)
+
+
+temp_month_2223_df <- chelsa_cluster_monthly_2223 %>% 
+  mutate(year = as.integer(year),
+         month = as.integer(month)) %>% 
+  dplyr::select(cluster_id, year, month, temp_C)
+
+#write.csv(temp_month_2223_df, here("data", "interim", "covariate_temp_20222023_cluster.csv"))
+```
+
+Combine 2003-2021 and 2022-2023 data
+```{r}
+temp_month_df <- read.csv(here("data", "interim", "covariate_temp_pre2021_cluster.csv")) %>% 
+  dplyr::select(-X)
+
+temp_month_both_df <- temp_month_df %>% 
+  rbind(temp_month_2223_df, by = c("cluster_id", "year", "month")) %>% 
+  mutate(year = as.integer(year),
+         month = as.integer(month),
+         temp_C = as.numeric(temp_C))
+
+range(temp_month_both_df$year, na.rm = TRUE) # check all year
+
+#write.csv(temp_month_both_df, here("data", "interim", "covariate_temp_both_cluster.csv"), row.names = FALSE)
+```
+
+# Covariate 3. Bird Index
+(lives on my google drive)
+```{r}
+drive_auth()
+## download rasters from my drive
+folder <- drive_get("bird community")
+
+download_bird <- function(file_name, file_id) {
+  temp_path <- tempfile(fileext = ".tif")
+  
+  drive_download(as_id(file_id),
+                 path = temp_path,
+                 overwrite = TRUE)
+  
+  r <- terra::rast(temp_path)
+  
+  message("loaded ", file_name)
+  
+  return(r)
+}
+
+g <- drive_ls(folder) %>% 
+  filter(grepl("\\.tif$", name, ignore.case = TRUE))
+
+files <- setNames(g$id, g$name)
+
+# store in list
+year_rasters <- lapply(names(files), function(name) {
+  download_bird(name, files[[name]])
+})
+
+names(year_rasters) <- gsub("\\.tif$", "", names(files))
+
+## convert weekly (52 layers) rasters to monthly (12 layers) values
+# assign 4–5 weeks per month
+weeks_to_month <- list(month_01 = 1:4,
+                       month_02 = 5:8,
+                       month_03 = 9:13,
+                       month_04 = 14:17,
+                       month_05 = 18:21,
+                       month_06 = 22:26,
+                       month_07 = 27:30,
+                       month_08 = 31:35,
+                       month_09 = 36:39,
+                       month_10 = 40:44,
+                       month_11 = 45:48,
+                       month_12 = 49:52)
+
+monthly_rasters <- lapply(year_rasters, function(r) {
+  monthly <- lapply(names(weeks_to_month), function(month_name) {
+    weeks <- weeks_to_month[[month_name]]
+    
+    terra::mean(r[[weeks]], na.rm = TRUE)
+  })
+  
+  monthly_stack <- terra::rast(monthly)
+  names(monthly_stack) <- names(weeks_to_month)
+  
+  return(monthly_stack)
+}) 
+
+## match crs
+cluster_vect <- vect(st_transform(cluster_shp, crs(monthly_rasters[[1]])))
+
+## extract monthly means
+extract_monthly_bird <- function(monthly_rasters, cluster_vect, cluster_ids) {
+  results <- list()
+  
+  for(year_name in names(monthly_rasters)) {
+    r <- monthly_rasters[[year_name]]
+    
+    ## extract cluster means
+    vals <- terra::extract(r, cluster_vect, fun = mean, na.rm = TRUE)
+    
+    # remove terra ID colum
+    vals <- vals[,-1]
+    
+    # add cluster_id
+    vals$cluster_id <- cluster_ids
+    
+    ## turn into long df
+    vals_long <- vals %>% 
+      tidyr::pivot_longer(cols = starts_with("month_"),
+                   names_to = "month",
+                   values_to = "bird_comp") %>% 
+      mutate(year = year_name,
+             month = as.integer(gsub("month_", "", month))) %>% 
+      dplyr::select(cluster_id, year, month, bird_comp)
+    
+    results[[year_name]] <- vals_long
+  }
+  
+  dplyr::bind_rows(results)
+}
+
+## run extraction
+bird_cluster <- extract_monthly_bird(monthly_rasters = monthly_rasters,
+                                     cluster_vect = cluster_vect,
+                                     cluster_ids = cluster_shp$cluster_id)
+
+bird_cluster_df <- bird_cluster %>% 
+  mutate(year = substr(year, nchar(year)-3, nchar(year)))  %>% 
+  mutate(year = as.integer(year),
+         month = as.integer(month)) %>% 
+  dplyr::select(cluster_id, year, month, bird_comp)
+
+#write.csv(bird_cluster_df, here("data", "interim", "covariate_bird_cluster.csv"), row.names = FALSE)
+```
+
+# Covariate 4. Soil Moisture from CCI
+(pre-processed monthly averages in Google Earth Engine and stored in my google drive)
+```{r}
+## authenticate, connect Gdrive
+drive_auth()
+folder <- drive_get("CCI_soilmoisture/2003_2023")
+g <- drive_ls(folder) %>% dplyr::filter(grepl("\\.nc$", name))
+files <- setNames(g$id, g$name)
+
+## download & stack soil moisture files
+read_nc <- function(file_id, file_name) {
+  tmp <- tempfile(fileext = ".nc")
+  drive_download(as_id(file_id), path = tmp, overwrite = TRUE)
+  rast(tmp, subds = "sm")
+}
+
+r_list <- lapply(names(files), function(nm) {
+  read_nc(files[[nm]], nm)
+})
+
+r <- do.call(c, r_list)
+
+## fix dates from file name
+dates <- as.Date(str_extract(names(files), "\\d{8}"),"%Y%m%d")
+
+names(r) <- format(dates, "%Y_%m")
+time(r) <- dates
+
+## correct crs
+clusters_vect <- vect(st_transform(cluster_shp, crs(r)))
+
+## extract mean SM for each cluster
+vals <- terra::extract(r, clusters_vect, fun = mean, na.rm = TRUE)
+
+## convert to long dataframe
+vals <- as.data.frame(vals)
+vals <- vals[,-1]
+vals$cluster_id <- cluster_shp$cluster_id
+
+# tidy up
+soil_cluster_monthly <- vals %>%
+  tidyr::pivot_longer(cols = -cluster_id,
+               names_to = "year_month",
+               values_to = "soil_moisture") %>%
+  mutate(date = as.Date(paste0(gsub("_", "-", year_month), "-01")),
+    year = format(date, "%Y"),
+    month = format(date, "%m")) %>%
+  group_by(cluster_id, year, month) %>%
+  dplyr::summarise(soilmoisture = mean(soil_moisture, na.rm = TRUE),.groups = "drop")
+
+
+
+soil_cluster_df <- soil_cluster_monthly %>% 
+  mutate(year = as.integer(year),
+         month = as.integer(month)) %>% 
+  dplyr::select(cluster_id, year, month, soilmoisture)
+
+#write.csv(soil_cluster_df, here("data", "interim", "covariate_soilmoisture_cluster.csv"), row.names = FALSE)
+```
+
+## Covariate 5. ET from GLEAM
+(processed on GEE and stored in my google folder)
+```{r}
+## authenticate, connect Gdrive
+drive_auth()
+
+folder <- drive_get("hydrology/GLEAM_et")
+g <- drive_ls(folder) %>% dplyr::filter(grepl("\\.nc$", name)) %>% arrange(name)
+files <- setNames(g$id, g$name)
+
+## download and stack
+r_list <- lapply(names(files), function(nm) {
+  tmp <- tempfile(fileext = ".nc")
+  drive_download(as_id(files[[nm]]), path = tmp, overwrite = TRUE)
+  rast(tmp)
+})
+
+r_stack <- do.call(c, r_list)
+
+## fix dates based on file name
+names(r_stack) <- format(time(r_stack), "%Y_%m")
+
+## correct crs of clusters
+clusters_vect <- vect(st_transform(cluster_shp, 4326))
+
+## crop
+ca_extent <- ext(-124, -113, 32, 42)
+r_stack <- crop(r_stack, ca_extent)
+
+## extract ET means to clusters
+vals <- terra::extract(r_stack, clusters_vect, fun = mean, na.rm = TRUE)
+
+## make long dataframe
+vals <- as.data.frame(vals)
+vals <- vals[,-1]
+vals$cluster_id <- cluster_shp$cluster_id
+
+# tidy it up
+gleam_et_monthly <- vals %>%
+  tidyr::pivot_longer(cols = -cluster_id,
+                      names_to = "year_month",
+                      values_to = "ET_mm") %>%
+  mutate(date = as.Date(paste0(gsub("_", "-", year_month), "-01")),
+    year = format(date, "%Y"),
+    month = format(date, "%m")) %>%
+  dplyr::select(cluster_id, year, month, ET_mm) 
+
+et_cluster_df <- gleam_et_monthly %>% 
+  mutate(year = as.integer(year),
+         month = as.integer(month)) %>% 
+  dplyr::select(cluster_id, year, month, ET_mm)
+
+#write.csv(et_cluster_df, here("data", "interim", "covariate_et_cluster.csv"), row.names = FALSE)
+```
+
+## Covariate 6. Standing Surface Water from JRC
+(processed on GEE and stored in my google folder)
+
+#### within 5 km buffers
+```{r}
+years <- 2003:2021
+
+water_dt <- map_dfr(years, \(y){
+  file <- here("data", "raw","public", "jrc_pct_5km",
+               glue::glue("JRC_water_pct_traps_5km_{y}.csv"))
+  
+  read_csv(file, col_select = c(cluster_id,year, month, water_pct), show_col_types = FALSE)
+})
+
+jrc_5km_cluster_df <- water_dt %>% 
+  mutate(year = as.integer(year),
+         month = as.integer(month),
+         jrc_5km = water_pct) %>% 
+  dplyr::select(cluster_id, year, month, jrc_5km)
+
+#write.csv(jrc_5km_cluster_df, here("data", "interim", "covariate_jrc5km_cluster.csv"), row.names = FALSE)
+
+```
+
+
+
+#### within 10 km buffers
+```{r}
+years <- 2003:2021
+
+water_dt <- map_dfr(years, \(y){
+  file <- here("data", "raw","public", "jrc_pct_10km",
+               glue::glue("JRC_water_pct_traps_10km_{y}.csv"))
+  
+  read_csv(file, col_select = c(cluster_id,year, month, water_pct), show_col_types = FALSE)
+})
+
+jrc_10km_cluster_df <- water_dt %>% 
+  mutate(year = as.integer(year),
+         month = as.integer(month),
+         jrc_10km = water_pct) %>% 
+  dplyr::select(cluster_id, year, month, jrc_10km)
+
+#write.csv(jrc_10km_cluster_df, here("data", "interim", "covariate_jrc10km_cluster.csv"), row.names = FALSE)
+
+
+
+```

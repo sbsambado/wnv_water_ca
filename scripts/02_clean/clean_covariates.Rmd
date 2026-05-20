@@ -1,0 +1,113 @@
+---
+title: "clean_covariates"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(here)
+library(readr)
+library(googledrive)
+library(sf)
+library(tigris)
+library(tidyverse)
+
+
+## upload cluster information
+cluster_shp <- st_read(here("data", "spatial_boundaries", "cluster_all_polygon.shp"))
+cluster_info <- read.csv(here("data", "interim", "cluster_all_info.csv"))
+
+## upload california boundaries
+options(tigris_use_cache = TRUE)
+ca_shp <- tigris::counties("ca", class = "sf")
+```
+
+
+Upload covariate data
+```{r}
+pdsi <- read_csv(here("data", "interim", "covariate_pdsi_cluster.csv")) %>% 
+  dplyr::select(,-1) %>% 
+  rename(value = pdsi) %>% 
+  mutate(var_name = "pdsi")
+    
+temp <- read_csv(here("data", "interim", "covariate_temp_both_cluster.csv")) %>% 
+  rename(value = temp_C) %>% 
+  mutate(var_name = "temp")
+
+bird <- read_csv(here("data", "interim", "covariate_bird_cluster.csv")) %>% 
+  rename(value = bird_comp) %>% 
+  mutate(var_name = "bird")
+
+
+sm <- read_csv(here("data", "interim", "covariate_soilmoisture_cluster.csv")) %>% 
+  rename(value = soilmoisture) %>% 
+  mutate(var_name = "soilmoisture")
+
+
+
+et <- read_csv(here("data", "interim", "covariate_et_cluster.csv")) %>% 
+  rename(value = ET_mm) %>% 
+  mutate(var_name = "et")
+
+
+## need to add JRC
+jrc_5km <- read_csv(here("data", "interim", "covariate_jrc5km_cluster.csv")) %>% 
+  rename(value = jrc_5km) %>% 
+  mutate(var_name = "jrc_5km")
+
+jrc_10km <- read_csv(here("data", "interim", "covariate_jrc10km_cluster.csv")) %>% 
+  rename(value = jrc_10km) %>% 
+  mutate(var_name = "jrc_10km")
+
+```
+
+## Make function to scale variable and then create a lag
+```{r}
+scale_lag_covars <- function(df, var_name) {
+  df %>% 
+    arrange(cluster_id, year, month) %>% 
+    group_by(cluster_id) %>% 
+    mutate(value_scaled = as.numeric(scale(value))) %>% 
+    mutate("{var_name}_lag0" := value_scaled,
+           "{var_name}_lag1" := dplyr::lag(value_scaled,1),
+           "{var_name}_lag2" := dplyr::lag(value_scaled,2),
+           "{var_name}_lag3" := dplyr::lag(value_scaled,3),
+           "{var_name}_lag4" := dplyr::lag(value_scaled,4)) %>% 
+    ungroup() %>% 
+    rename(value_raw = value) %>% 
+    dplyr::select(cluster_id, year, month, value_raw, starts_with(var_name))
+}
+
+```
+
+
+## Apply function
+```{r}
+pdsi_scaledlag <- scale_lag_covars(pdsi, "pdsi") %>% rename(pdsi_raw = value_raw)
+temp_scaledlag <- scale_lag_covars(temp, "temp") %>% rename(temp_raw = value_raw)
+bird_scaledlag <- scale_lag_covars(bird, "bird") %>% rename(bird_raw = value_raw)
+sm_scaledlag <- scale_lag_covars(sm, "soilmoisture") %>% rename(soilmoisture_raw = value_raw)
+et_scaledlag <- scale_lag_covars(et, "et") %>% rename(et_raw = value_raw)
+jrc5km_scaledlag <- scale_lag_covars(jrc_5km, "jrc_5km") %>% rename(jrc_5km_raw = value_raw)
+jrc10km_scaledlag <- scale_lag_covars(jrc_10km, "jrc_10km") %>% rename(jrc_10km_raw = value_raw)
+
+```
+
+## Join dataframes together
+```{r}
+## try to avoid left_join to not blow up my computer
+# put all dataframes in 1 list
+dfs <- list(pdsi = pdsi_scaledlag,
+            temp = temp_scaledlag,
+            bird = bird_scaledlag,
+            sm   = sm_scaledlag, 
+            et   = et_scaledlag,
+            jrc_5km = jrc5km_scaledlag,
+            jrc_10km = jrc10km_scaledlag)
+
+## reduce 
+all_covars <- reduce(dfs, full_join, by = c("cluster_id", "year", "month"))
+
+## save
+#write.csv(all_covars, here("data", "interim", "covariates_combined_scalelag.csv"), row.names = FALSE)
+```

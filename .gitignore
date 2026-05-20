@@ -1,0 +1,37 @@
+# R
+.Rhistory
+.RData
+.Rproj.user/
+.Ruserdata
+
+# renv
+renv/library/
+
+# restricted/private data
+data/raw/restricted/
+
+# large intermediate files
+data/interim/
+data/raw/
+data/spatial_boundaries
+
+# model objects
+outputs/models/
+
+# optional rendered outputs
+*.html
+
+# OS junk
+.DS_Store
+data/
+
+##
+scripts/05_figures/iq_cv_2022.gpkg
+scripts/05_figures/iq_cv_2022.gpkg-journal
+scripts/05_figures/landIQ_cv_2022.rds
+
+scripts/05_figures/*.gpkg
+scripts/05_figures/*.rds
+
+.Rprofile
+renv/

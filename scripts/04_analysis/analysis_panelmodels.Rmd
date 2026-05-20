@@ -1,0 +1,322 @@
+---
+title: "analysis_panelmodels"
+output: html_document
+---
+
+Manuscript ID: RSTB-2025-0484
+
+Title: Water availability affects West Nile virus dynamics in a heavily managed agricultural landscape
+
+Authors: Samantha Sambado, Andrew J. MacDonald, Alex Konings, and Erin A. Mordecai
+
+Corresponding author: ssambado@stanford.edu
+
+```{r setup, include=FALSE}
+## upload necessary packages
+library(here)
+library(fixest)
+library(broom)
+```
+
+### upload data
+```{r}
+## upload culex tarsalis data
+abund_tar_panel_full <- read.csv(here("data", "interim", "abundance_tar_cluster.csv"))
+wnv_tar_panel_full <- read.csv(here("data", "interim", "wnv_tar_cluster.csv"))
+
+## upload covariate data
+station_covariates_full <- read.csv(here("data" ,"interim", "covariates_scalelag_stationmeta.csv"))
+```
+
+
+### filter data for april-october & select counties
+```{r}
+### ABUNDANCE
+abund_tar_panel_filtered <- abund_tar_panel_full %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::rename(year = surv_year) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month))
+  
+station_covariates_filtered <- station_covariates_full %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month)) 
+## combine
+abund_tar_panel_select <- abund_tar_panel_filtered %>% 
+  left_join(station_covariates_filtered %>% dplyr::select(-county), by = c("cluster_id", "year", "month"))
+
+#write.csv(abund_tar_panel_select, file = here("data", "derived", "abund_tar_panel_select.csv"), row.names = FALSE)
+
+
+### WNV MIR
+wnv_tar_panel_filtered <- wnv_tar_panel_full %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::rename(year = surv_year) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month))
+  
+station_covariates_filtered <- station_covariates_full %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month)) 
+## combine
+wnv_tar_panel_select <- wnv_tar_panel_filtered %>% 
+  left_join(station_covariates_filtered %>% dplyr::select(-county), by = c("cluster_id", "year", "month"))
+
+#write.csv(wnv_tar_panel_select, file = here("data", "derived", "wnv_tar_panel_select.csv"), row.names = FALSE)
+```
+
+# Fit models for Main Text 
+
+## Overall Effect of PDSI
+
+### Abundance ~ PDSI
+Equation 1
+```{r}
+# build model
+mod_fe_abund_pdsi <- feols(log(mos_per_trap_night + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_tar_panel_select)
+
+# check summary
+summary(mod_fe_abund_pdsi)
+confint(mod_fe_abund_pdsi, level = 0.95)
+
+# look at table
+etable(mod_fe_abund_pdsi)
+
+#saveRDS(mod_fe_abund_pdsi,file = here("outputs", "models", "mod_fe_abund_pdsi.rds"))
+```
+
+### WNV ~ PDSI
+Equation 2
+```{r}
+# build model - without outliers I can fit 
+wnv_tar_panel_under101 <- wnv_tar_panel_select %>% # 36,478 observations
+  filter(WNV_MIR < 101) # 36,429 observations
+
+mod_fe_wnv_pdsi <- feols(log(WNV_MIR+1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) + bird_lag0 |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = wnv_tar_panel_under101)
+
+# check summary
+summary(mod_fe_wnv_pdsi)
+confint(mod_fe_wnv_pdsi, level = 0.95)
+# look at table
+etable(mod_fe_wnv_pdsi)
+
+#saveRDS(mod_fe_wnv_pdsi,file = here("outputs", "models", "mod_fe_wnv_pdsi.rds"))
+```
+
+
+
+## Spatial Heterogeneity of PDSI's Effect
+
+### Abundance ~ PDSI*HR
+Equation 3
+```{r}
+# build model
+mod_fe_abund_pdsi_HR <- feols(log(mos_per_trap_night + 1) ~ i(hydro_region, pdsi_lag0) + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_tar_panel_select)
+
+# check summary
+summary(mod_fe_abund_pdsi_HR)
+confint(mod_fe_abund_pdsi_HR, level = 0.95)
+
+# look at table
+etable(mod_fe_abund_pdsi_HR)
+
+#saveRDS(mod_fe_abund_pdsi_HR,file = here("outputs", "models", "mod_fe_abund_pdsi_HR.rds"))
+
+
+```
+
+
+### WNV MIR ~ PDSI*HR
+Equation 4
+```{r}
+# build model
+mod_fe_wnv_pdsi_HR <- feols(log(WNV_MIR+ 1) ~ i(hydro_region, pdsi_lag0) + temp_lag0 + I(temp_lag0^2) + bird_lag0 |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = wnv_tar_panel_under101)
+
+# check summary
+summary(mod_fe_wnv_pdsi_HR)
+confint(mod_fe_wnv_pdsi_HR, level = 0.95)
+
+# look at table
+etable(mod_fe_wnv_pdsi_HR)
+
+#saveRDS(mod_fe_wnv_pdsi_HR,file = here("outputs", "models", "mod_fe_wnv_pdsi_HR.rds"))
+
+```
+
+## Hydrological Variables Associations
+
+(no lags)
+### Abundance ~ Hydrological Variables
+Equation 5-8
+```{r}
+## run individual models for each hydrological variable with no time lag
+# variables 
+hydro_vars <- c("soilmoisture_lag0", "et_lag0", "jrc_5km_lag0", "jrc_10km_lag0")
+
+## make function to build model formula
+hydro_formula_abund <- function(var){
+  as.formula(paste0("log(mos_per_trap_night + 1) ~ ", var,
+                    "+ temp_lag0 + I(temp_lag0^2) | cluster_id + year + month"))
+}
+
+## apply function
+hydro_mod_abund_nolags <- lapply(hydro_vars, function(v) {
+  feols(fml = hydro_formula_abund(v),
+        vcov = conley(5),
+        data = abund_tar_panel_select)
+})
+
+
+# fix names
+names(hydro_mod_abund_nolags) <- hydro_vars
+
+## model summaries
+lapply(hydro_mod_abund_nolags, summary)
+lapply(hydro_mod_abund_nolags, confint, level = 0.95)
+
+etable(hydro_mod_abund_nolags,
+       headers = c("SM", "ET", "SW - 5km", "SW - 10km"),
+       dict = c("log(mos_per_trap_night+1" = "Abundance",
+                #pdsi = "PDSI",
+                temp_lag0 = "Temp (std)",
+                temp_lag0 = "Temp^2 (std)"),
+       fitstat = ~ n + r2 + wr2,
+        digits = 3, style.tex = style.tex("aer"))
+
+
+#saveRDS(hydro_mod_abund_nolags,file = here("outputs", "models", "mod_fe_abund_hydro_nolags.rds"))
+```
+
+
+### WNV MIR ~ Hydrological Variables
+Equation 9-12
+```{r}
+## run individual models for each hydrological variable with no time lag
+# variables 
+hydro_vars <- c("soilmoisture_lag0", "et_lag0", "jrc_5km_lag0", "jrc_10km_lag0")
+
+## make function to build model formula
+hydro_formula_wnv <- function(var){
+  as.formula(paste0("log(WNV_MIR + 1) ~ ", var,
+                    "+ temp_lag0 + I(temp_lag0^2) + bird_lag0 | cluster_id + year + month"))
+}
+
+## apply function
+hydro_mod_wnv_nolags <- lapply(hydro_vars, function(v) {
+  feols(fml = hydro_formula_wnv(v),
+        vcov = conley(5),
+        data = wnv_tar_panel_under101)
+})
+
+
+# fix names
+names(hydro_mod_wnv_nolags) <- hydro_vars
+
+## model summaries
+lapply(hydro_mod_wnv_nolags, summary)
+lapply(hydro_mod_wnv_nolags, confint, level = 0.95)
+
+etable(hydro_mod_wnv_nolags,
+       headers = c("SM", "ET", "SW - 5km", "SW - 10km"),
+       dict = c("log(WNV_MIR +1)" = "WNV",
+                #pdsi = "PDSI",
+                temp_lag0 = "Temp (std)",
+                temp_lag0 = "Temp^2 (std)",
+                bird_lag0 = "Bird (std)"),
+       fitstat = ~ n + r2 + wr2,
+        digits = 3, style.tex = style.tex("aer"))
+
+
+#saveRDS(hydro_mod_wnv_nolags,file = here("outputs", "models", "mod_fe_wnv_hydro_nolags.rds"))
+```
+
+(with lags)
+### Abundance ~ Hydrological Variables
+```{r}
+## run individual models for each hydrological variable with different time lag
+# variables 
+hydro_vars_base <- c("soilmoisture", "et", "jrc_5km", "jrc_10km")
+lags <- 0:3
+
+# create all variable-lag combos
+hydro_vars <- expand.grid(var = hydro_vars_base, lag = lags, stringsAsFactors = FALSE)
+hydro_vars$full_var <- paste0(hydro_vars$var, "_lag", hydro_vars$lag)
+
+## make function to build model formula
+hydro_formula_abund_lags <- function(var){
+  as.formula(paste0("log(mos_per_trap_night + 1) ~ ", var,
+                    "+ temp_lag0 + I(temp_lag0^2) | cluster_id + year + month"))
+}
+
+## run models
+hydro_mod_abund_withlags <- lapply(hydro_vars$full_var,
+                                   function(v){feols(fml = hydro_formula_abund_lags(v),
+                                           vcov = conley(5),
+                                           data = abund_tar_panel_select)
+                                   })
+
+names(hydro_mod_abund_withlags) <- hydro_vars$full_var
+
+## model summaries
+lapply(hydro_mod_abund_withlags, summary)
+lapply(hydro_mod_abund_withlags, confint, level = 0.95)
+
+#saveRDS(hydro_mod_abund_withlags,file = here("outputs", "models", "mod_fe_abund_hydro_withlags.rds"))
+```
+
+### WNV MIR ~ Hydrological Variables
+```{r}
+## run individual models for each hydrological variable with different time lag
+# variables 
+hydro_vars_base <- c("soilmoisture", "et", "jrc_5km", "jrc_10km")
+lags <- 0:3
+
+# create all variable-lag combos
+hydro_vars <- expand.grid(var = hydro_vars_base, lag = lags, stringsAsFactors = FALSE)
+hydro_vars$full_var <- paste0(hydro_vars$var, "_lag", hydro_vars$lag)
+
+## make function to build model formula
+hydro_formula_wnv_lags <- function(var){
+  as.formula(paste0("log(WNV_MIR + 1) ~ ", var,
+                    "+ temp_lag0 + I(temp_lag0^2) + bird_lag0 | cluster_id + year + month"))
+}
+
+## run models
+hydro_mod_wnv_withlags <- lapply(hydro_vars$full_var,
+                                   function(v){feols(fml = hydro_formula_wnv_lags(v),
+                                           vcov = conley(5),
+                                           data = wnv_tar_panel_under101)
+                                   })
+
+names(hydro_mod_wnv_withlags) <- hydro_vars$full_var
+
+## model summaries
+lapply(hydro_mod_wnv_withlags, summary)
+lapply(hydro_mod_wnv_withlags, confint, level = 0.95)
+
+#saveRDS(hydro_mod_wnv_withlags,file = here("outputs", "models", "mod_fe_wnv_hydro_withlags.rds"))
+```
+
+

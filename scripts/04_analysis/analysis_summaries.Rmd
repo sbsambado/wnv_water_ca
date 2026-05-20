@@ -1,0 +1,277 @@
+---
+title: "analysis_summaries"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(here)
+library(broom)
+library(tidyverse)
+library(modelsummary)
+library(scales)
+library(janitor)
+library(tidycensus)
+```
+
+### Abstract
+```{r}
+# use tarsalis calsurv clean data
+calsurv_tar_clean <- read.csv(here("data", "interim", "abundance_tar_cluster.csv"))
+
+length(unique(calsurv_tar_clean$surv_year)) # 21 total years
+sum(calsurv_tar_clean$total_mos) #19,440,201 individual mosquitoes
+```
+
+### Results
+
+summary statistics
+```{r}
+## surveillance info
+calsurv_tar_clean <- read.csv(here("data", "interim", "abundance_all_cluster.csv")) %>% 
+  filter(species == "Cx tarsalis")
+
+sum(calsurv_tar_clean$num_clean) # 19,440,201 total mosquitoes
+sum(calsurv_tar_clean$trap_nights) # 1,214,538
+length(unique(calsurv_tar_clean$trapstation_id)) # 24,372 unique trap stations
+length(unique(calsurv_tar_clean$cluster_id)) # 2,818 unique cluster id
+
+## wnv info
+calsurv_tar_clean_wnv <- read.csv(here("data", "interim", "wnv_tar_cluster.csv")) 
+
+sum(calsurv_tar_clean_wnv$total_pools) # 414,722
+sum(calsurv_tar_clean_wnv$total_mos_tested) #13,705,162
+
+calsurv_tar_clean_wnv %>% 
+  summarise(perc = sum(positive_pools, na.rm = TRUE)/
+              sum(total_pools, na.rm = TRUE),
+            perc = perc*100) # 4.053559
+  
+```
+
+### Overall effect of PDSI
+
+Abundance
+```{r}
+mod_fe_abund_pdsi <- readRDS(here("outputs", "models", "mod_fe_abund_pdsi.rds"))
+
+summary(mod_fe_abund_pdsi)
+round(confint(mod_fe_abund_pdsi, level = 0.95),2)
+mod_fe_abund_pdsi_tidy <- tidy(mod_fe_abund_pdsi, conf.int = TRUE) %>% 
+  mutate(across(where(is.numeric), ~ signif(.x,2)))
+
+#glance(mod_fe_abund_pdsi)
+#modelsummary(mod_fe_abund_pdsi)
+```
+
+WNV MIR
+```{r}
+mod_fe_wnv_pdsi <- readRDS(here("outputs", "models", "mod_fe_wnv_pdsi.rds"))
+
+round(confint(mod_fe_wnv_pdsi, level = 0.95),2)
+mod_fe_wnv_pdsi_tidy <- tidy(mod_fe_wnv_pdsi, conf.int = TRUE) %>% 
+  mutate(across(where(is.numeric), ~ signif(.x,2)))
+
+#glance(mod_fe_wnv_pdsi)
+#modelsummary(mod_fe_wnv_pdsi)
+```
+
+
+### Spatial Heterogeneity of PDSI's Effect
+
+Abundance
+```{r}
+mod_fe_abund_pdsi_HR <- readRDS(here("outputs", "models", "mod_fe_abund_pdsi_HR.rds"))
+
+mod_fe_abund_pdsi_HR_tidy <- tidy(mod_fe_abund_pdsi_HR, conf.int = TRUE) %>% 
+  mutate(across(where(is.numeric), ~ signif(.x,2)))
+
+#glance(mod_fe_abund_pdsi_HR)
+#modelsummary(mod_fe_abund_pdsi_HR)
+```
+
+WNV MIR
+```{r}
+mod_fe_wnv_pdsi_HR <- readRDS(here("outputs", "models", "mod_fe_wnv_pdsi_HR.rds"))
+summary(mod_fe_wnv_pdsi_HR)
+mod_fe_wnv_pdsi_HR_tidy <- tidy(mod_fe_wnv_pdsi_HR, conf.int = TRUE) %>% 
+  mutate(across(where(is.numeric), ~ signif(.x,2)))
+
+#glance(mod_fe_wnv_pdsi_HR)
+#modelsummary(mod_fe_wnv_pdsi_HR)
+```
+
+
+## Hydrological Variables Associations
+
+Abundance
+```{r}
+hydro_mod_abund_withlags <- readRDS(here("outputs", "models", "mod_fe_abund_hydro_withlags.rds"))
+
+hydro_mod_abund_withlags_tidy <- tidy(hydro_mod_abund_withlags, conf.int = TRUE) %>% 
+  mutate(across(where(is.numeric), ~ signif(.x,2)))
+
+#glance(hydro_mod_abund_withlags)
+modelsummary(hydro_mod_abund_withlags)
+
+
+```
+
+### Table 2
+```{r}
+calsurv_all_clean <- read.csv(here("data", "interim", "abundance_all_cluster.csv")) 
+
+# county-clusters
+calsurv_all_clean %>% 
+  filter(species == "Cx tarsalis") %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  group_by(county, collection_id) %>% 
+  summarise(n_clusters = n_distinct(cluster_id, na.rm = TRUE))
+
+# county trapnights
+calsurv_all_clean %>% 
+  filter(species == "Cx tarsalis") %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>%
+  distinct(county, collection_id, trap_nights) %>% 
+  group_by(county) %>% 
+  summarise(tot_trapnight = sum(trap_nights, na.rm = TRUE),
+            n_collections = n(), .groups = "drop")
+
+## total mosquiotes
+calsurv_all_clean %>% 
+  filter(species == "Cx tarsalis") %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  group_by(county) %>% 
+  summarise(n_mos = sum(num_clean, na.rm = TRUE)) %>% 
+  mutate(n_mos = comma(n_mos))
+
+
+## average WNV
+calsurv_tar_clean_wnv <- read.csv(here("data", "interim", "wnv_tar_cluster.csv")) 
+calsurv_tar_clean_wnv %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  filter(WNV_MIR < 101) %>% 
+  group_by(county) %>% 
+  summarise(mean_wnv = mean(WNV_MIR, na.rm = TRUE), 
+            mean_wnv = round(mean_wnv,2),
+            sd_wnv = sd(WNV_MIR, na.rm = TRUE),
+            sd_wnv = round(sd_wnv,1), .groups = "drop")
+
+
+## mean pdsi
+station_covariates_full <- read.csv(here("data" ,"interim", "covariates_scalelag_stationmeta.csv"))
+
+station_covariates_full  %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  group_by(county) %>%
+  summarise(mean_pdsi = mean(pdsi_raw, na.rm = TRUE), 
+            mean_pdsi = round(mean_pdsi,2),
+            sd_pdsi =  sd(pdsi_raw, na.rm = TRUE), 
+            sd_pdsi = round(sd_pdsi,1),.groups = "drop")
+
+## mean human WNVND
+
+# call list of counties
+counties <- c("Butte", "Glenn", "Colusa", "Yolo", "Sacramento",
+              "Placer", "Yuba", "Tehama", "Sutter", "Shasta",
+              "San Joaquin", "Stanislaus", "Merced","Madera", "Fresno",
+              "Kings", "Tulare", "Kern")
+
+# pull in files
+arbonet_files <- list.files(here("data", "raw" ,"public", "arbonet_wnvnd_eachyear"), pattern = "\\.csv$",
+                            full.names = TRUE)
+
+# clean up data
+arbonet <- arbonet_files %>% map_dfr(read.csv) %>% clean_names() %>% 
+  filter(year %in% 2003:2023) %>% 
+  mutate(state = substr(location,1,2)) %>% 
+  filter(state == "CA") %>% 
+  mutate(county = str_remove(location, "CA, ")) %>% 
+  filter(county %in% counties) %>% 
+  dplyr::select(county, neuroinvasive_disease_cases, total_human_disease_cases)
+
+# calculate incidence
+census_api_key("7c6ef05b5134350077eb61afffdfc0702e3636a4")
+county_pop <- get_acs(geography = "county", variables = "B01003_001", state = "06", year = 2020) %>% 
+  mutate(county = str_remove(NAME, " County, California"),
+         population = estimate)  %>% 
+  dplyr::select(county, population) %>% 
+  filter(county %in% counties)
+
+
+arbonet %>% 
+  group_by(county) %>% 
+  summarise(total_wnv_cases = sum(total_human_disease_cases, na.rm = TRUE), .groups = "drop") %>% 
+  left_join(county_pop, by = "county") %>% 
+  dplyr::group_by(county) %>% 
+  summarise(incidence_100k = (total_wnv_cases/population)*100000,
+            mean_incidence_100k = incidence_100k/21,
+            total_cases = sum(total_wnv_cases)) %>% 
+  dplyr::select(county, mean_incidence_100k, total_cases) %>%
+  mutate(mean_incidence_100k = round(mean_incidence_100k,2))
+```
+### Table S3
+
+```{r}
+# use info from Table 2
+station_covariates_full <- read.csv(here("data" ,"interim", "covariates_scalelag_stationmeta.csv"))
+
+## mean sm
+station_covariates_full  %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::group_by(county) %>%
+  summarise(mean_sm = mean(soilmoisture_raw, na.rm = TRUE), 
+            mean_sm = round(mean_sm,2),
+            sd_sm =  sd(soilmoisture_raw, na.rm = TRUE), 
+            sd_sm = round(sd_sm,2),.groups = "drop")
+
+
+## standing water 5km
+station_covariates_full  %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::group_by(county) %>%
+  summarise(mean_sw = mean(jrc_5km_raw, na.rm = TRUE), 
+            mean_sw = round(mean_sw,2),
+            sd_sw =  sd(jrc_5km_raw, na.rm = TRUE), 
+            sd_sw = round(sd_sw,2),.groups = "drop")
+
+## et
+station_covariates_full %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::group_by(county) %>%
+  summarise(mean_et = mean(et_raw, na.rm = TRUE), 
+            mean_et = round(mean_et,2),
+            sd_et =  sd(et_raw, na.rm = TRUE), 
+            sd_et = round(sd_et,2),.groups = "drop")
+
+```
+
+## Supplemental 
+
+### ST1
+```{r}
+## surveillance info
+calsurv_all_clean <- read.csv(here("data", "interim", "abundance_all_cluster.csv")) 
+
+sum(calsurv_all_clean$num_clean) # 38,592,919 total mosquitoes
+sum(calsurv_all_clean$trap_nights) # 2,832,101
+length(unique(calsurv_all_clean$trapstation_id)) # 36770 unique trap stations
+length(unique(calsurv_all_clean$cluster_id)) # 2902 unique cluster id
+
+## wnv info
+calsurv_all_clean_wnv <- read.csv(here("data", "interim", "wnv_all_cluster.csv")) 
+
+length(unique(calsurv_all_clean_wnv$pool_id)) # 557,840
+length(unique(calsurv_all_clean_wnv$trapstation_id)) # 18,491
+
+## check how many zeo
+calsurv_tar_clean_wnv %>% filter(WNV_MIR > 100) # 
+66/49029
+```

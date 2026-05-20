@@ -1,0 +1,131 @@
+---
+title: "create_clusters"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(sf)
+
+```
+
+
+## Combine outcome data for main + sutter
+```{r}
+# abundance
+abundance_all_clean <- bind_rows(abundance_0316_clean,
+                                 abundance_1723_clean,
+                                 abundance_sutter_clean)
+
+# wnv mir
+wnv_all_clean <- bind_rows(wnv_main_clean,
+                           wnv_sutter_clean)
+
+```
+
+## Make function to create clusters
+
+```{r}
+
+create_trapclusters <- function(df, 
+                                crs_project = 3310, # change to m for distance calc
+                                cluster_distance = 3000, #clustering threshold in m (3km)
+                                buffer_radius = 1500, # buffer radius in m (1.5km)
+                                cluster_offset = 10000) { # ensure clusterIDs unique across counties
+  # step 1. id county spatial units
+  counties <- unique(df$county) # split data by county to avoid huge distance matrices
+  out_list <- vector("list", length(counties)) # make list for speed
+  
+  # step 2. loop through each county to help comp mem
+  for (i in seq_along(counties)) {
+    
+    cty <- counties[i]
+    
+    # extract unique trap locations within county
+    stations <- df %>% 
+      filter(county == cty) %>% 
+      distinct(county, trapstation_id, latitude, longitude, .keep_all = TRUE) # 1 pt per trap station
+    
+    # convert to spatial object & fix crs
+    stations_sf <- stations %>% 
+      sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
+      sf::st_transform(crs_project)
+    
+    # comput distance matrix
+    dist_matrix <- as.matrix(sf::st_distance(stations_sf))
+    
+    # hierarchical clustering
+    # complete linkage = max distance within cluster minimized
+    hc <- hclust(as.dist(dist_matrix), method = "complete")
+    
+    # cut dendrogram into clusters on distance threshold
+    stations$cluster_id <- cutree(hc, h = cluster_distance)
+    
+    # make clusterIDs unique across counties
+    #stations$cluster_id <- stations$cluster_id + cluster_offset * (i-1)
+    stations$cluster_id <- paste0(cty, "_", stations$cluster_id)
+    
+    # store result for each county
+    out_list[[i]] <- stations
+  }
+  
+  # step 3. combine all counties into 1 dataset
+  stations_all <- dplyr::bind_rows(out_list)
+  
+  # step 4. creat cluster centroids
+  centroids <- stations_all %>% 
+    sf::st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% # convert backt to sp pts
+    group_by(cluster_id) %>% 
+    summarise(n_traps = n(), .groups = "drop") %>% # count traps per cluster
+    sf::st_centroid() %>% 
+    sf::st_transform(crs_project) # convert back to m for spatial consistency
+  
+  # step 5. create buffer polygons around cluster centroids
+  buffers <- centroids %>% 
+    sf::st_buffer(buffer_radius) # creats circular buffer around each centroid
+  
+  # step 6. return all spatial objects as a named list
+  list(stations = stations_all,
+       centroids = centroids, 
+       buffers = buffers)
+  
+}
+```
+
+## Run clustering function
+```{r}
+# first make 1 succint table
+unique_traps <- bind_rows(abundance_all_clean %>% 
+                         dplyr::select(county, trapstation_id, latitude, longitude),
+                       wnv_all_clean %>% 
+                         dplyr::select(county, trapstation_id, latitude, longitude)) %>% 
+  distinct()
+
+# now run cluster once
+cluster_results <- create_trapclusters(unique_traps)
+```
+
+## Join clusterID with trap station
+```{r}
+# pull out clusterID for each station
+stations_all <- cluster_results$stations
+#write.csv(stations_all,here("data", "interim", "cluster_all_info.csv"))
+
+# add back to outocme datasets
+abundance_all_clustered <- abundance_all_clean %>% 
+  left_join(stations_all %>% dplyr::select(trapstation_id, cluster_id), by = "trapstation_id")
+
+wnv_all_clustered <- wnv_all_clean %>% 
+  left_join(stations_all %>% dplyr::select(trapstation_id, cluster_id), by = "trapstation_id")
+```
+## make cluster polygon to extract all data
+```{r}
+cluster_polygons <- cluster_results$buffers
+#st_write(cluster_polygons,here("data", "spatial_boundaries", "cluster_all_polygon.shp")) 
+```
+
+## Save data
+```{r}
+write_csv(abundance_all_clustered, here("data", "interim", "abundance_all_cluster.csv"))
+write_csv(wnv_all_clustered, here("data", "interim", "wnv_all_cluster.csv"))
+
+```

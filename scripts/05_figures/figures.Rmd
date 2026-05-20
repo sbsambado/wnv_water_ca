@@ -1,0 +1,1196 @@
+---
+title: "figures"
+output: html_document
+---
+
+Manuscript ID: RSTB-2025-0484
+
+Title: Water availability affects West Nile virus dynamics in a heavily managed agricultural landscape
+
+Authors: Samantha Sambado, Andrew J. MacDonald, Alex Konings, and Erin A. Mordecai
+
+Corresponding author: ssambado@stanford.edu
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(sf)
+library(tigris)
+library(ggpubr)
+library(patchwork)
+library(ggspatial)
+library(devtools)
+#devtools::install_github("an-bui/calecopal")
+library(calecopal)
+names(cal_palettes)
+library(paletteer)
+library(broom)
+library(here)
+library(maps)
+library(wesanderson)
+
+## upload station data
+
+## upload ca shapefile
+options(tigris_use_cache = TRUE)
+ca <- tigris::counties("ca", class = "sf", cb = TRUE, resolution = "20m")
+
+## upload cv
+cv <- st_read(here("data", "spatial_boundaries", "centralvalley", "centralvalley.shp"))
+
+## theme style
+theme_style <- theme(legend.title = element_text(size = 14, face = "bold"),
+                     legend.text = element_text(size = 13),
+                     plot.margin = margin(0,0,0,0)) +
+  theme_void()
+
+
+```
+
+
+# Main Text
+
+## Figure 1
+
+### Part A - Precip (Where)
+format data
+```{r}
+### upload
+#prism_annual <- terra::rast(here("data", "raw", "public", "prism_ppt_us_30s_2020_avg_30y", #"prism_ppt_us_30s_2020_avg_30y.tif"))
+#
+### correct crs
+#ca_prism <- st_transform(ca, crs = crs(prism_annual))
+#prism_crop <- crop(prism_annual, ca_prism)
+#prism_mask <- mask(prism_crop, ca_prism)
+#
+### turn into dataframe
+#prism_df <- as.data.frame(prism_mask, xy = TRUE)
+#names(prism_df)[3] <- "precip"
+#
+### align alluvial boundary
+#cv_prism <- st_read(here("data", "spatial_boundaries", "centralvalley", "centralvalley.shp")) %>% 
+#  st_transform(st_crs(ca_prism))
+```
+
+plot data
+```{r}
+#fig_1_a <- ggplot() +
+#  geom_raster(data = prism_df, aes(x = x, y = y, fill = precip)) +
+#  geom_sf(data = cv_prism, fill = NA, color = "black", size = 0.6) +
+#  coord_sf(expand = FALSE) +
+#  theme_style +
+#  scale_fill_gradientn(colors = cal_palette("sbchannel", type = "continuous", n = 15),
+#                       breaks = c(1000,4000), limits = c(0, 4000),
+#                       guide = guide_colorbar(title.hjust = 0.5)) +
+#  labs(fill = "Precip. (mm)") +
+#  theme(legend.position = c(0.715, 0.73),
+#        legend.key.width = unit(0.6, "cm"),
+#        legend.key.height = unit(0.4, "cm"),
+#        legend.title = element_text(face = "bold", size = 14)) +
+#  annotate("text", x = -119.2, y = 41.5, label = "A", fontface = "bold", size = 10) +
+#  annotation_scale(location = "bl", width_hint = 0.22, pad_x = unit(.2, "cm"), pad_y = unit(.2, "cm")) #+
+#  annotation_north_arrow(location = "bl",  pad_x = unit(.2, "cm"), pad_y = unit(1.2, "cm"))
+#
+#ggsave(fig_1_a, file = here("outputs", "figures", "main", "fig_1_a_v1.png"), dpi = 400, bg = "white")
+```
+
+### Part B - Precip (When)
+format data
+```{r}
+#### wrangle data 
+## need to make loop to call in
+#prism_tif_files <- list.files(here("data", "raw", "public", "prism_normals_precip_800m_monthly"), 
+#                              pattern = "\\.tif$", full.names = TRUE, recursive = TRUE)
+#prism_tif_files <- sort(prism_tif_files) # make sure its 01-12
+#prism_monthly <- terra::rast(prism_tif_files)
+#
+## make month name from file name
+#month_nums <- str_extract(prism_tif_files, "(?<=_)\\d{6}(?=_)") #this gives yearmonth 
+#month_nums <- substr(month_nums, 5,6) # this extracts month
+#names(prism_monthly) <- paste0("X", as.numeric(month_nums)) # change column names
+#
+### align crs, crop, mask
+#ca_prism_vect <- vect(st_transform(ca, crs(prism_monthly)))
+#prism_monthly_crop <- crop(prism_monthly,ca_prism_vect)
+#prism_monthly_mask <- mask(prism_monthly_crop, ca_prism_vect)
+#
+### align hydro region (HR)
+#HR_prism <- st_read(here("data", "spatial_boundaries", "i03_Hydrologic_Regions", #"i03_Hydrologic_Regions.shp")) %>% 
+#  st_transform(st_crs(prism_monthly_mask))
+#HR_prism_vect <- vect(HR_prism)
+#
+### extract precip per HR
+#HR_prism_monthly <- terra::extract(prism_monthly_mask, HR_prism_vect, fun = mean, na.rm = TRUE)
+#
+### make tidy format
+#HR_prism_monthly_df <- HR_prism_monthly %>% 
+#  mutate(region = HR_prism_vect$HR_NAME) %>% 
+#  group_by(region) %>% 
+#  summarise(across(starts_with("X"), mean, na.rm = TRUE)) %>% 
+#  pivot_longer(cols = starts_with("X"), names_to = "month", values_to = "precip") %>% 
+#  mutate(month = factor(as.numeric(gsub("X", "", month)), levels = 1:12, labels = month.abb))
+```
+
+plot data
+```{r}
+
+#fig_1_b <- HR_prism_monthly_df %>% 
+#  filter(region == "Sacramento River" | region == "San Joaquin River" | region == "Tulare Lake") %>% 
+#  ggplot(aes(x = month, y = precip, color = region, group = region)) +
+#  geom_line(size = 1.5) +
+#  geom_point(size = 4) +
+#  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005")) +
+#  labs(y = "Precip. (mm)", color = "Hydrologic Region", x = NULL) +
+#  theme_bw() +
+#  theme(legend.position =c(0.55,.59), 
+#        axis.title = element_text(size = 15, face = "bold"),
+#        axis.text.x = element_text(size = 14),
+#        axis.text.y = element_text(size = 14),
+#        panel.grid = element_blank(),
+#        legend.title = element_text(size = 17, face = "bold"),
+#        legend.text  = element_text(size = 16),
+#        plot.margin = margin(0,0,0,0))   +
+#  scale_x_discrete(expand = c(0.02,0)) +
+#  scale_y_continuous(expand = c(0.02,0)) +
+#  annotate("text", x = 1.8, y = 170, label = "B", fontface = "bold", size = 10)
+
+#ggsave(fig_1_b, file = here("outputs", "figures", "main", "fig_1_b_v1.png"), dpi = 400, bg = "white")
+```
+
+save top figure for presentations
+```{r}
+#fig_1_top <- fig_1_a + fig_1_b
+#ggsave(fig_1_top , file = here("outputs", "figures", "main", "fig_1_top_v1.png"), dpi = 400, bg = #"white", width = 12)
+```
+
+### Part C - Water features
+format data
+```{r}
+### get everything in the correct crs
+#target_crs <- 3310
+#cv_3310 <- st_transform(cv, target_crs)
+#
+### rivers 
+#rivers_major <- st_read(here("data","raw", "public", "NHD_Major_Rivers","NHD_Major_Rivers.shp" )) %>% 
+#  st_zm(drop = TRUE) %>% 
+#  st_transform(target_crs)
+#
+## only select rivers within central valley
+#rivers_major_cv <- st_intersection(rivers_major, cv_3310) 
+#
+### wetlands
+#wetlands <- st_read(here("data","raw", "public", "wetlands_cv.gpkg"), layer = "CA_Wetlands") %>%
+#  st_transform(target_crs)
+#
+### hr regions
+#HR_cv <- st_read(here("data", "spatial_boundaries", "i03_Hydrologic_Regions", #"i03_Hydrologic_Regions.shp")) %>% 
+#  st_transform(st_crs(cv_3310))
+## only plot
+#HR_cv_clip <- st_intersection(HR_cv, cv_3310)
+#
+```
+
+plot data
+```{r}
+## set basin colors
+#HR_colors <- ifelse(HR_cv_clip$HR_NAME == "Sacramento River", alpha("#ADC397", 0.4),
+#                    ifelse(HR_cv_clip$HR_NAME == "San Joaquin River", alpha("#DFBF2B", 0.4),
+#                           ifelse(HR_cv_clip$HR_NAME == "Tulare Lake", alpha("#EA8005", 0.4),
+#                                  "#f0f0f0")))
+#
+#
+#fig_1_c <- ggplot() +
+#  geom_sf(data = ca, fill = "grey97", color = NA, size = 0.3) +
+#    geom_sf(data = cv_3310, fill = "white", color = "black", size = 0.6) +
+#  geom_sf(data = HR_cv_clip, fill = HR_colors, color = NA) +
+#  # add water features
+#  geom_sf(data = rivers_major_cv, aes(linetype = "Rivers"), color = "#1D91C0", linewidth = 0.8) +
+#  geom_sf(data = wetlands, aes(fill = "Wetlands"), color = NA) +
+#  # make manual legend
+#  scale_fill_manual(name = "Water Features", values = c("Wetlands" = "#2CA25F")) +
+#  scale_linetype_manual(name = "", values = c("Rivers" = 1)) +
+#  guides(linetype = guide_legend(override.aes = list(linewidth = 4)))+
+#  theme_style +
+#  theme(legend.text = element_text(size = 15),
+#        legend.title = element_text(size = 14, face = "bold"),
+#        legend.position =c(0.86,.87))  +
+#  coord_sf(xlim = c(-122.7, -118.4), ylim = c(34.7, 40.4), crs = 4326, expand = FALSE)  +
+#  annotate("text", x = -120.5, y = 40.1, label = "C", fontface = "bold", size = 10) +
+#  annotate("text", x = -120.8, y = 39.4, label = "Sac.\nRiver\nHR", size = 8) +
+#  annotate("text", x = -119.8, y = 38, label = "San\nJoaquin\nRiver\nHR", size = 8) +
+#  annotate("text", x = -121.0, y = 36, label = "Tulare\nLake\nHR", size = 8)
+#
+#ggsave(fig_1_c, file = here("outputs", "figures", "main", "fig_1_c_v1.png"), dpi = 400, bg = "white")
+```
+
+
+### Part D - Irrigation type
+format data
+```{r}
+### get everything in the correct crs
+#target_crs <- 3310
+#cv_3310 <- st_transform(cv, target_crs)
+#
+#iq <- st_read(here("data", "raw", "public", "i15_crop_mapping_2022_shp", "i15_crop_mapping_2022.shp")) #%>% 
+#  st_zm(drop = TRUE) %>% 
+#  st_transform(target_crs)
+#
+### some messy boarders so try simplifying
+#iq_valid <- st_make_valid(iq) 
+#iq_valid <- iq_valid[!st_is_empty(iq_valid),] # remove empty geoms
+#
+## clip to only central valley
+#iq_cv <- st_intersection(iq_valid, cv_3310)
+#
+### save to pull this up later for heat extreme proj
+##saveRDS(iq_cv, "landIQ_cv_2022.rds")
+#
+### pull out crop data to filter on later
+## these are 2-3 digit codes but the first letter is the main crop type - this could be refined
+#iq_cv <- iq_cv %>% 
+#  mutate(main_letter = substr(MAIN_CROP, 1, 1))
+#
+#unique(iq_cv$main_letter)
+#
+### assign irrigation type 
+#irrigation_type <- data.frame(crop_group = c("F", "I", "P", "G" ,"T", "Y", "X", "D", "C", "V", "R", #"*")) %>% 
+#  mutate(irrigation = case_when(crop_group %in% c("R",  "P") ~ "Flood",
+#                                crop_group %in% c("G","F") ~ "Sprinkler",
+#                                crop_group %in% c("V", "C", "D", "T", "Y") ~ "Drip",
+#                                TRUE ~ "Unknown"))
+#iq_cv_irrigation <- iq_cv %>% 
+#  left_join(irrigation_type, by = c("main_letter" = "crop_group")) %>% 
+#  mutate(irrigation = case_when(is.na(irrigation) ~ "Urban",
+#                                TRUE ~ irrigation)) %>% 
+#  mutate(irrigation = factor(irrigation, 
+#                             levels = c("Flood", "Sprinkler", "Drip", "Unknown", "Urban")))
+#
+```
+
+plot data
+```{r}
+### make hydro colors
+#irrigation_colors <- c("Flood" = "#e31a1c",
+#                       "Sprinkler" = "#6592d6",
+#                       "Drip" = "#cce5ff",
+#                       "Urban" = "#d9d9d9")
+#
+#fig_1_d <- ggplot() +
+#  geom_sf(data = ca, fill = "grey97", color = NA, size = 0.3) +
+#  geom_sf(data = cv_3310, fill = "white", color = "black", size = 0.6) +
+#  geom_sf(data = iq_cv_irrigation, aes(fill = irrigation), color = NA) +
+#  scale_fill_manual(values = irrigation_colors, na.value = "#f0f0f0") +
+#  labs(fill = "Irrigation Type") +
+#  theme_style +
+#  theme(legend.text = element_text(size = 15),
+#        legend.title = element_text(size = 14, face = "bold"),
+#        legend.position =c(0.86,.87)) +
+#  coord_sf(xlim = c(-122.7, -118.4), ylim = c(34.7, 40.4), crs = 4326, expand = FALSE) +
+#  annotate("text", x = -120.5, y = 40.1, label = "D", fontface = "bold", size = 10)
+#
+#
+#ggsave(fig_1_d, file = here("outputs", "figures", "main", "fig_1_d_v1.png"), dpi = 400, bg = "white")
+```
+
+**Combine for full Fig 1**
+```{r}
+## split into top/bottom rows
+#bottom_row <- (fig_1_c | plot_spacer() | fig_1_d) +
+#  plot_layout(widths = c(1, 0.04, 1))  # tiny gap
+#
+#top_row <- fig_1_a | fig_1_b
+#
+#fig_1_full <- top_row / bottom_row +
+#  plot_layout(heights = c(0.8, 2))
+#
+#ggsave(fig_1_full, file = here("outputs", "figures", "main", "fig_1_full_v1.png"), 
+#       dpi = 400, bg = "white",
+#       width = 12, height = 12)
+
+
+```
+
+## Figure 2
+
+### Part A - Trap stations
+format data
+```{r}
+### correct crs
+#target_crs <- 3310
+#ca_3310 <- ca %>% st_transform(target_crs)
+#cv_3310 <- st_transform(cv, target_crs)
+#
+#
+### upload station data
+#stations_all <- read.csv(here("data", "interim", "cluster_all_info.csv")) %>% 
+#  dplyr::select(-X) %>% 
+#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta")
+#
+#cluster_summary <- stations_all %>% 
+#  group_by(cluster_id) %>% 
+#  summarise(n_traps = n_distinct(trapstation_id),
+#            lat = mean(latitude, na.rm = TRUE),
+#            lon = mean(longitude, na.rm = TRUE), .groups = "drop") %>% 
+#  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>% 
+#  st_transform(target_crs)
+#
+#cluster_summary_cv <- st_intersection(cluster_summary, cv_3310)
+#
+```
+
+plot data
+```{r}
+
+#fig_2_a <- ggplot() +
+#  geom_sf(data = ca_3310, fill = "grey80", color = "grey50", size = 0.3) +
+#  geom_sf(data = cv_3310, fill = "grey99", color = "black", size = 0.6, alpha = 0.5) +
+#  geom_sf(data = cluster_summary_cv, aes(color = log(n_traps)), alpha = 0.7) +
+#  scale_color_paletteer_c("grDevices::Blue-Yellow", direction = 1) +
+#  labs(color  = "log(Traps per Cluster)") +
+#  theme_style +
+#  theme(legend.position =c(0.1,.15),
+#        legend.text = element_text(size = 15),
+#        legend.title = element_text(size = 14, face = "bold")) +
+#  coord_sf(xlim = c(-122.7, -118.4), ylim = c(34.7, 40.4), crs = 4326, expand = FALSE) +
+#  annotate("text", x = -120.5, y = 40, label = "A", fontface = "bold", size = 10) +
+#  annotation_scale(location = "tr", width_hint = 0.22, pad_x = unit(.2, "cm"), pad_y = unit(.2, "cm")) #+
+#  annotation_north_arrow(location = "tr",  pad_x = unit(.2, "cm"), pad_y = unit(1.2, "cm"))
+#
+#ggsave(fig_2_a, file = here("outputs", "figures", "main", "fig_2_a_v2.png"), dpi = 400, bg = "white")
+```
+
+
+### Part C - Abundance
+format data
+```{r}
+### upload data
+#abundance_tar_cluster <- read.csv(here("data", "interim", "abundance_tar_cluster.csv")) %>% 
+#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% #
+#  rename(year = surv_year)
+#
+### make summary 
+#abundance_summary <- abundance_tar_cluster %>% 
+#  group_by(year, month) %>% 
+#  summarise(mean_mos = mean(mos_per_trap_night, na.rm = TRUE),
+#            sd_mos = sd(mos_per_trap_night, na.rm = TRUE),
+#            n = n(), .groups = "drop") %>% 
+#  mutate(year_num = as.numeric(year),
+#         month_num = as.numeric(month),
+#         time_id = year_num + (month_num-1)/12,
+#         lower = pmax(mean_mos - sd_mos,0),
+#         upper = pmax(mean_mos + sd_mos, 100),
+#         mean_mos_log = log(mean_mos+1)) %>% 
+#  filter(time_id >= (2003 + (4-1)/12),
+#         time_id <= (2023 + (11-1)/12))
+#
+### pdsi data
+#pdsi <- read.csv(here("data", "interim", "covariates_scalelag_stationmeta.csv")) %>% 
+#  dplyr::select(county, cluster_id, year, month, pdsi_raw) %>% 
+#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta")
+#
+#pdsi_summary <- pdsi %>% 
+#  filter(year >= 2003, year <= 2023) %>% 
+#  mutate(date = as.Date(sprintf("%d-%02d-01", year, month))) %>% 
+#  group_by(year, month) %>% 
+#  summarise(pdsi_mean = mean(pdsi_raw, na.rm = TRUE), .groups = "drop") %>% 
+#  mutate(year_num = as.numeric(year),
+#         month_num = as.numeric(month),
+#         time_id = year_num + (month_num - 1)/12,
+#         xmin = time_id - 1/24, #year_num - 0.5,
+#         xmax = time_id + 1/24) #year_num + 0.5) 
+
+```
+
+plot data
+```{r}
+#fig_2_b <- ggplot() +
+#  geom_rect(data = pdsi_summary, aes(xmin = xmin, xmax = xmax,
+#                                     ymin = -Inf, ymax = Inf,
+#                                     fill = pdsi_mean), alpha = 0.3) +
+#  
+#  geom_line(data = abundance_summary, aes(x = time_id, y = mean_mos_log), color =  "#0047ab", linewidth #= 1) +
+#  geom_point(data = abundance_summary, aes(x = time_id, y = mean_mos_log), color = "#007fff", size = #2.5) +
+#  
+#  scale_fill_gradient2(low = "#9E3D22", mid = "white", high = "#2B5C8A", midpoint = 0,
+#                       name = "Annual\nMean\nPDSI") +
+#  scale_x_continuous(breaks = seq(min(abundance_summary$time_id), max(abundance_summary$time_id), by = #1),
+#                     labels = function(x) ifelse(x %% 4 ==3, x, ""), expand = c(0,0.0)) +
+#  labs(y = "log(Mosquitoes per trap night)") +
+#  theme_classic(base_size = 14) +
+#  theme(axis.title.x = element_blank(),
+#    axis.title.y = element_text(face = "bold"),
+#    legend.title = element_text(face = "bold"),
+#    plot.margin = margin(0, 0, 0, 1)) +
+#  annotate("text", x = 2004, y = 5, label = "B", fontface = "bold", size = 10) +
+#  coord_cartesian(clip = "off")
+
+```
+
+
+### Part C - WNV MIR
+format data
+```{r}
+### upload data
+#wnv_tar_cluster <- read.csv(here("data", "interim", "wnv_tar_cluster.csv")) %>% 
+#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% #
+#  rename(year = surv_year)
+#
+### make summary 
+#wnv_summary <- wnv_tar_cluster %>% 
+#  group_by(year, month) %>% 
+#  summarise(mean_wnv = mean(WNV_MIR, na.rm = TRUE),
+#            sd_wnv = sd(WNV_MIR, na.rm = TRUE),
+#            n = n(), .groups = "drop") %>% 
+#  mutate(year_num = as.numeric(year),
+#         month_num = as.numeric(month),
+#         time_id = year_num + (month_num-1)/12,
+#         lower = pmax(mean_wnv - sd_wnv,0),
+#         upper = pmax(mean_wnv + sd_wnv, 100),
+#         mean_wnv_log = log(mean_wnv+1)) %>% 
+#  filter(time_id >= (2003 + (4-1)/12),
+#         time_id <= (2023 + (11-1)/12))
+#
+```
+
+plot data
+```{r}
+#fig_2_c <- ggplot() +
+#  geom_rect(data = pdsi_summary, aes(xmin = xmin, xmax = xmax,
+#                                     ymin = -Inf, ymax = Inf,
+#                                     fill = pdsi_mean), alpha = 0.3) +
+#  
+#  geom_line(data = wnv_summary, aes(x = time_id, y = mean_wnv_log), color =  "#0047ab", linewidth = 1) #+
+#  geom_point(data = wnv_summary, aes(x = time_id, y = mean_wnv_log), color = "#007fff", size = 2.5) +
+#  
+#  scale_fill_gradient2(low = "#9E3D22", mid = "white", high = "#2B5C8A", midpoint = 0,
+#                       name = "Mean PDSI") +
+#  scale_x_continuous(breaks = seq(2003, 2023, by = 3),
+#                     labels = function(x) x, expand = c(0,0)) + 
+#  labs(y = "log(WNV MIR)") +
+#  theme_classic(base_size = 14) +
+#  theme(axis.title.x = element_blank(),
+#        legend.text = element_text(size = 15),
+#        legend.title = element_text(size = 14, face = "bold"),
+#        legend.key.width = unit(0.8, "cm"),
+#    axis.title.y = element_text(face = "bold"),
+#    plot.margin = margin(0, 0, 0, 1)) +
+#  annotate("text", x = 2004, y = 2.5, label = "C", fontface = "bold", size = 10) +
+#  coord_cartesian(clip = "off")
+#
+
+```
+
+**Combine for full Fig 2**
+```{r}
+#fig_2_a_v2 <- fig_2_a + theme(legend.position = "bottom")  
+#fig_2_b_v2 <- fig_2_b + guides(fill = FALSE) + theme(axis.text.x = element_blank())
+#fig_2_c_v2 <- fig_2_c + theme(legend.position = "bottom", axis.text.x = element_text(size = 14)) ##guides(fill = FALSE)
+#
+#
+#fig_2_full <- fig_2_a_v2 | (fig_2_b_v2 / fig_2_c_v2) 
+#
+#
+#ggsave(fig_2_full, file = here("outputs", "figures", "main", "fig_2_full_v1.png"), 
+#       dpi = 400, bg = "white", width = 11)
+#
+```
+
+
+
+## Figure 3
+
+### Part A - Overall effect of PDSI
+format data
+```{r}
+### upload model results
+#mod_fe_abund_pdsi <- readRDS(here("outputs", "models", "mod_fe_abund_pdsi.rds"))
+#mod_fe_wnv_pdsi <- readRDS(here("outputs", "models", "mod_fe_wnv_pdsi.rds"))
+#
+### make one 
+#abund_pdsi_coef <- broom::tidy(mod_fe_abund_pdsi) %>% 
+#  filter(term == "pdsi_lag0") %>% 
+#  mutate(outcome = "Abundance")
+#
+#wnv_pdsi_coef <- broom::tidy(mod_fe_wnv_pdsi) %>% 
+#  filter(term == "pdsi_lag0") %>% 
+#  mutate(outcome = "WNV MIR")
+#  
+#pdsi_coef <- bind_rows(abund_pdsi_coef, wnv_pdsi_coef)
+```
+
+plot data
+```{r}
+#fig_3_a <- pdsi_coef %>% 
+#  ggplot(aes(x = outcome, y = estimate, color = outcome)) +
+#  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+#                    ymax = estimate + 1.96 * std.error),width = 0.15, linewidth = 2) +
+#  geom_point(size = 6.5) +
+#  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
+#  scale_color_manual(values = c( "Abundance" = "#007fff", "WNV MIR" ="#007fff" )) +# "#0047ab""#098154"
+#  theme_minimal(base_size = 18) +
+#  labs(x = "",y = "Effect of PDSI") +
+#  theme(axis.title = element_text(face = "bold"),
+#    axis.text.x = element_text(size = 18),
+#    axis.text.y = element_text(size = 18),
+#    panel.grid.minor = element_blank(),
+#    legend.position = "none") +
+#  annotate("text", x = .5, y = 0.18, label = "A", fontface = "bold", size = 10)
+#
+#ggsave(fig_3_a, file = here("outputs", "figures", "main", "fig_3_a_v1.png"), dpi = 400, bg = "white")
+```
+
+### Part B - Spatial heterogeneity of PDSI
+format data
+```{r}
+#mod_fe_abund_pdsi_HR <- readRDS(here("outputs", "models", "mod_fe_abund_pdsi_HR.rds"))
+#mod_fe_wnv_pdsi_HR <- readRDS(here("outputs", "models", "mod_fe_wnv_pdsi_HR.rds"))
+#
+#abund_pdsi_HR_coef <- broom::tidy(mod_fe_abund_pdsi_HR) %>% 
+#  mutate(outcome = "Abundance")  %>% 
+#  filter(grepl("hydro_region::", term)) %>% 
+#  mutate(hydro_region = gsub("hydro_region::", "", term),
+#         hydro_region = gsub("HR:pdsi_lag0", "", hydro_region),
+#         lower = estimate - 1.96 * std.error,
+#         upper = estimate + 1.96 * std.error)
+#
+#wnv_pdsi_HR_coef <- broom::tidy(mod_fe_wnv_pdsi_HR) %>% 
+#  mutate(outcome = "WNV MIR")  %>% 
+#  filter(grepl("hydro_region::", term)) %>% 
+#  mutate(hydro_region = gsub("hydro_region::", "", term),
+#         hydro_region = gsub("HR:pdsi_lag0", "", hydro_region),
+#         lower = estimate - 1.96 * std.error,
+#         upper = estimate + 1.96 * std.error) 
+#
+#pdsi_HR_coef <- bind_rows(abund_pdsi_HR_coef, wnv_pdsi_HR_coef) 
+```
+
+plot data
+```{r}
+#fig_3_b <- pdsi_HR_coef %>% 
+#  ggplot(aes(x = outcome, y = estimate, color = hydro_region)) +
+#  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+#                    ymax = estimate + 1.96 * std.error),width = 0.35, linewidth = 2,
+#                position = position_dodge(width = 0.65)) +
+#  geom_point(size = 6.5,position = position_dodge(width = 0.65)) +
+#  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
+#  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005" )) +
+#  theme_minimal(base_size = 18) +
+#  labs(x = "",y = "Effect of PDSI", color = "Hydrological Region") +
+#  theme(axis.title = element_text(face = "bold"),
+#    axis.text.x = element_text(size = 18),
+#    axis.text.y = element_text(size = 18),
+#    panel.grid.minor = element_blank(),
+#    legend.title = element_text(face = "bold"),
+#    legend.position = "right") +
+#  annotate("text", x = .5, y = 0.33, label = "B", fontface = "bold", size = 10)
+#
+#ggsave(fig_3_b, file = here("outputs", "figures", "main", "fig_3_b_v1.png"), dpi = 400, bg = "white")
+```
+
+
+### Part C - Hydrological variable associations
+format data
+```{r}
+
+### upload model results
+#mod_fe_abund_hydro_withlags <- readRDS(here("outputs", "models", "mod_fe_abund_hydro_withlags.rds"))
+#mod_fe_wnv_hydro_withlags <- readRDS(here("outputs", "models", "mod_fe_wnv_hydro_withlags.rds"))
+#
+### make into tables
+#abund_hydro_coef <- map2_df(mod_fe_abund_hydro_withlags, names(mod_fe_abund_hydro_withlags), ~ {
+#  tidy(.x) %>%
+#    filter(term == .y) %>%   # match the variable to its model
+#    mutate(hydro_var = .y,
+#           outcome = "Abundance")
+#})
+#
+#wnv_hydro_coef <- map2_df(mod_fe_wnv_hydro_withlags, names(mod_fe_wnv_hydro_withlags), ~ {
+#  tidy(.x) %>%
+#    filter(term == .y) %>%   # match the variable to its model
+#    mutate(hydro_var = .y,
+#           outcome = "WNV MIR")
+#})
+#
+#
+#both_hydro_coef <- bind_rows(abund_hydro_coef, wnv_hydro_coef) %>% 
+#  mutate(lag = case_when(grepl("lag0", term) ~ "0 mo",
+#                         grepl("lag1", term) ~ "1 mo",
+#                         grepl("lag2", term) ~ "2 mo",
+#                         grepl("lag3", term) ~ "3 mo",
+#                         TRUE ~ NA_character_)) %>% 
+#  mutate(hydro_var = case_when(grepl("soilmoisture", hydro_var) ~ "Soil Moisture",
+#                               grepl("et", hydro_var) ~ "Evapotranspiration",
+#                               grepl("jrc_5km", hydro_var) ~ "Standing Water",
+#                               grepl("jrc_10km", hydro_var) ~ "Standing Water (10km)",
+#                               TRUE ~ NA_character_))
+#
+#write.csv(both_hydro_coef, here("outputs", "models", "both_hydro_coef.csv"), row.names = FALSE)
+```
+
+plot data
+```{r}
+
+#hydro_colors <- c(  
+#  "Soil Moisture" =     "#D3105C" , 
+#  "Evapotranspiration" = "#3A5D3D",
+#  "Standing Water" =  "#4C4976",
+#  "Standing Water (10km)" = "#D87B82")
+#
+#lag_alpha <- c("0 mo" = 1,
+#               "1 mo" = 0.75,
+#               "2 mo" = 0.55,
+#               "3 mo" = 0.35)
+#
+#fig_3_c <- both_hydro_coef %>% 
+#  filter(hydro_var != "Standing Water (10km)") %>% 
+#  mutate(hydro_var = factor(hydro_var,
+#                               levels = c("Soil Moisture","Standing Water", "Evapotranspiration" ))) #%>% 
+#  ggplot(aes(x = outcome, y = estimate, color = hydro_var, alpha = lag)) +
+#  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+#                    ymax = estimate + 1.96 * std.error),width = 0.35, linewidth = 2,
+#                position = position_dodge(width = 0.65)) +
+#  geom_point(size = 4.5,position = position_dodge(width = 0.65)) +
+#  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
+#  scale_color_manual(values = c(hydro_colors)) +
+#  scale_alpha_manual(values = lag_alpha) +
+#  theme_minimal(base_size = 18) +
+#  labs(x = "",y = "Coefficient Estimate", alpha = "Month Lag") +
+#  theme(axis.title = element_text(face = "bold"),
+#    axis.text.x = element_text(size = 18),
+#    axis.text.y = element_text(size = 18),
+#    panel.grid.minor = element_blank(),
+#    legend.title = element_text(face = "bold"),
+#    legend.position = "bottom",
+#    strip.text = element_text(face = "bold", size = 20)) +
+#  facet_wrap(~hydro_var, ncol = 3) +
+#  guides(color = FALSE) 
+
+```
+
+
+**Combine for full Fig 3**
+```{r}
+#fig_3_a_v2 <- fig_3_a_ +
+#  annotate("text", x = .5, y = 0.18, label = "A", fontface = "bold", size = 10)
+#
+#fig_3_b_v2 <-  fig_3_b +
+#  annotate("text", x = .5, y = 0.33, label = "B", fontface = "bold", size = 10)
+#
+#fig_3_c_v2 <- fig_3_c + theme(legend.position = "right")
+#
+#fig_3_full <- (fig_3_a + fig_3_b)/ fig_3_c_v2 +
+#  plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(size = 28, face = "bold"))
+#
+#ggsave(fig_3_full, file = here("outputs", "figures", "main", "fig_3_full_v3.png"),
+#       width = 13, height = 10, 
+#       dpi = 400, bg = "white")
+#
+```
+
+
+
+# Supplemental Text
+
+## Figure S1
+format data
+```{r}
+### get everything in the correct crs
+#target_crs <- 3310
+#cv_3310 <- st_transform(cv, target_crs)
+#
+### rivers 
+#rivers_major <- st_read(here("data","raw", "public", "NHD_Major_Rivers","NHD_Major_Rivers.shp" )) %>% 
+#  st_zm(drop = TRUE) %>% 
+#  st_transform(target_crs)
+#
+## only select rivers within central valley
+#rivers_major_cv <- st_intersection(rivers_major, cv_3310) 
+#
+#rivers_major_rank <- rivers_major_cv %>% 
+#  mutate(type_rank = case_when(ftype == 334 ~ "Connector",
+#                               ftype == 336 ~ "Canal ditch",
+#                               ftype == 428 ~ "Pipeline",
+#                               ftype == 460 ~ "Stream/river",
+#                               ftype == 558 ~ "Artificial path",
+#                               TRUE ~ NA))   %>% #rivers_major %>% 
+#  mutate(stablility_rank = case_when(fcode == 46006 ~ 5,          # Perennial
+#                                     fcode == 46003 ~ 4,          # Intermittent
+#                                     fcode %in% c(33600, 33601, 33400) ~ 3,  # Canal/Ditch
+#                                     fcode == 55800 ~ 2,          # Artificial Path
+#                                     TRUE ~ 1))                      # Ephemeral / Connector / Other)) # 
+#
+#
+### wetlands
+#wetlands <- st_read(here("data","raw", "public", "wetlands_cv.gpkg"), layer = "CA_Wetlands") %>%
+#  st_transform(target_crs)
+```
+
+plot data
+```{r}
+#fig_s_1 <- ggplot() +
+#  geom_sf(data = ca, fill = "grey97", color = NA, size = 0.3) +
+#  geom_sf(data = cv_3310, fill = "grey85", color = "black", size = 0.6) +
+#  # add water features
+#  geom_sf(data = rivers_major_rank, aes(color = factor(type_rank)),  linewidth = 0.8) +
+#  geom_sf(data = wetlands, aes(fill = WETLAND_TYPE), color = scales::alpha("black", 0.01), linewidth = #0.1) +
+#  # assign colors
+#  scale_fill_manual(values = c("Freshwater Emergent Wetland" = "#F11B00",
+#                               "Freshwater Forested/Shrub Wetland" = "#EE5A03",
+#                               "Freshwater Pond" =  "#EA8005",         
+#                               "Riverine" = "#DFBF2B",              
+#                               "Lake" = "#F2B705",                         
+#                               "Estuarine and Marine Wetland" = "#ADC397",
+#                               "Estuarine and Marine Deepwater" = "#95BBB1",
+#                               "Other" =  "#CAC96A")) +
+#    scale_color_manual(values = c("Stream/river" = "#08519c",  
+#                                "Canal ditch"    = "#4F94F7",   
+#                                "Connector"      = "#5780D1",   
+#                                "Artificial path"= "#58ADC5",   
+#                                "Pipeline"       = "#7bccc4")) +
+#  guides(color = guide_legend(override.aes = list(linewidth = 4)))+
+#  theme_style +
+#  theme(legend.text = element_text(size = 15),
+#        legend.title = element_text(size = 14, face = "bold"))  +
+#  labs(fill = "Wetland Type", color = "River Type") +
+#  coord_sf(xlim = c(-122.7, -118.4), ylim = c(34.7, 40.4), crs = 4326, expand = FALSE) 
+#
+#ggsave(fig_s_1, file = here("outputs", "figures", "supplement", "fig_s_1_v1.png"), dpi = 400, bg = #"white")
+```
+
+
+## Figure S2
+```{r}
+### upload data
+#stations_all <- read.csv(here("data", "interim", "cluster_all_info.csv")) %>% 
+#  dplyr::select(-X) %>% 
+#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta")
+#
+### format data
+#fig_s_2 <- stations_all %>% 
+#  group_by(cluster_id) %>% 
+#  summarise(n_traps = n_distinct(trapstation_id)) %>% 
+#  ungroup() %>% 
+#  ggplot(aes(x = n_traps)) +
+#  geom_histogram(binwidth = 1, fill = "#007fff", color = "#606372") + #"#79A8A4"
+#  labs(x = "Number of trap stations per cluster", y = "Count of clusters") +
+#  theme_minimal() +
+#  xlim(c(0,100)) +
+#  theme(axis.title = element_text(size = 14, face = "bold")) 
+#
+#ggsave(fig_s_2, file = here("outputs", "figures", "supplement", "fig_s_2_v1.png"), dpi = 400, bg = #"white")
+```
+
+## Figure S3
+
+### Part A - full map of CA
+```{r}
+### correct crs
+#target_crs <- 3310
+#ca_3310 <- ca %>% st_transform(target_crs)
+#cv_3310 <- st_transform(cv, target_crs)
+#
+#
+### upload station data
+#stations_all <- read.csv(here("data", "interim", "cluster_all_info.csv")) %>% 
+#  dplyr::select(-X) %>% 
+#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta")
+#
+#cluster_summary <- stations_all %>% 
+#  group_by(cluster_id) %>% 
+#  summarise(n_traps = n_distinct(trapstation_id),
+#            lat = mean(latitude, na.rm = TRUE),
+#            lon = mean(longitude, na.rm = TRUE), .groups = "drop") %>% 
+#  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>% 
+#  st_transform(target_crs)
+#
+#cluster_summary_cv <- st_intersection(cluster_summary, cv_3310)
+#
+#
+#fig_s_3_a <- ggplot() +
+#  geom_sf(data = ca_3310, fill = "grey80", color = "grey50", size = 0.3) +
+#  geom_sf(data = cv_3310, fill = "grey99", color = "black", size = 0.6, alpha = 0.5) +
+#  geom_sf(data = cluster_summary_cv, aes(color = log(n_traps)), alpha = 0.7) +
+#  scale_color_paletteer_c("grDevices::Blue-Yellow", direction = 1) +
+#  labs(color  = "log(Traps\nper\nCluster)") +
+#  theme_style +
+#  theme(#legend.position =c(0.1,.15),
+#        legend.text = element_text(size = 15),
+#        legend.title = element_text(size = 14, face = "bold")) +
+#  #annotate("text", x = -120.5, y = 40, label = "A", fontface = "bold", size = 10) +
+#  annotation_scale(location = "tr", width_hint = 0.22, pad_x = unit(.2, "cm"), pad_y = unit(.2, "cm")) #+
+#  annotation_north_arrow(location = "tr",  pad_x = unit(.2, "cm"), pad_y = unit(1.2, "cm"))
+```
+
+### Part B - hydrological regions
+format data
+```{r}
+### upload data
+#counties_sac <- c("Butte", "Glenn", "Colusa", "Yolo", "Sacramento",
+#                  "Placer", "Yuba", "Shasta", "Tehama", "Sutter", "Shasta")
+#counties_sanjoaquin <- c("San Joaquin", "Stanislaus", "Merced","Madera", "Fresno")
+#counties_tulare <- c("Kings", "Tulare", "Kern")
+#
+#county_to_hr <- dplyr::bind_rows(data.frame(county = counties_sac, hydro_region = "Sacramento River #HR"),
+#  data.frame(county = counties_sanjoaquin,hydro_region = "San Joaquin River HR"),
+#  data.frame(county = counties_tulare,hydro_region = "Tulare Lake HR"))
+#
+#
+### select for largish cities
+#cities <- maps::us.cities %>%
+#  filter(country.etc == "CA", pop > 100000) %>%   # adjust threshold
+#  st_as_sf(coords = c("long", "lat"), crs = 4326) %>%
+#  st_transform(st_crs(ca_3310)) %>% 
+#  mutate(name = sub(" CA$", "", name)) %>% 
+#  st_intersection(cv_3310)
+#
+### add hydroregion
+#cluster_summary_cv_HR <- cluster_summary_cv %>% 
+#  mutate(county = gsub("_.*", "", cluster_id)) %>% 
+#  left_join(county_to_hr, by = "county")
+#
+```
+
+plot data 
+(this needs work)
+```{r}
+#color_limits <- range(log(cluster_summary_cv_HR$n_traps), na.rm = TRUE)
+#
+#hr_list <- c("Sacramento River HR", "San Joaquin River HR", "Tulare Lake HR")
+#
+#HR_maps <- list()
+#
+#for(cty in hr_list) {
+#  
+#  county_clusters <- cluster_summary_cv_HR %>% 
+#    filter(hydro_region == cty)
+#  
+#  # get bbox for zoom
+#  bbox <- st_bbox(county_clusters)
+#  
+#  # make sac + tulare a little more zoomed out
+#  xrange <- bbox["xmax"] - bbox["xmin"]
+#  yrange <- bbox["ymax"] - bbox["ymin"]
+#  
+#  if(cty %in% c("Sacramento River HR", "Tulare Lake HR")) {
+#    xpad <- xrange * 0.5
+#    ypad <- yrange * 0.5
+#    } else {
+#    xpad <- xrange * 0.15
+#    ypad <- yrange * 0.15
+#  }
+#  
+#  # crop cities to region
+#  bbox_expanded <- bbox
+#
+#  bbox_expanded["xmin"] <- bbox["xmin"] - xpad
+#  bbox_expanded["xmax"] <- bbox["xmax"] + xpad
+#  bbox_expanded["ymin"] <- bbox["ymin"] - ypad
+#  bbox_expanded["ymax"] <- bbox["ymax"] + ypad
+#
+#  cities_sub <- st_crop(cities, bbox_expanded)
+#  
+#  # plot
+#  fig_s_clusterlocation_cty <- ggplot() +
+#    
+#    geom_sf(data = ca_3310, 
+#            fill = "grey90", 
+#            color = "white") +
+#    
+#    geom_sf(data = county_clusters, 
+#            aes(color = log(n_traps)), 
+#            alpha = .3) +
+#    
+#    geom_sf_text(data = cities_sub, aes(label = name, geometry = geometry), 
+#                 stat = "sf_coordinates",
+#                 force = 2, color = "red", size = 6) +
+#    
+#    scale_color_gradientn(colors = paletteer_c("grDevices::Purple-Yellow", 30),
+#                          limits = color_limits) +
+#    
+#    coord_sf(xlim = c(bbox_expanded["xmin"],
+#                      bbox_expanded["xmax"]),
+#             ylim = c(bbox_expanded["ymin"],
+#                      bbox_expanded["ymax"]), expand = FALSE)+
+#    
+#    theme_style +
+#    theme(title = element_text(size = 15, face = "bold"),
+#      legend.title = element_text(size = 14, face = "bold"),
+#      legend.text = element_text(size = 13)) +
+#    
+#    labs(color = "log(Traps per Cluster)", title = cty)
+#  
+#  # store in list
+#  HR_maps[[cty]] <- fig_s_clusterlocation_cty
+#}
+#
+### make individual plots
+#fig_s_3_b <- HR_maps[["Sacramento River HR"]] + guides(color = FALSE)
+#
+#fig_s_3_c <- HR_maps[["San Joaquin River HR"]] + guides(color = FALSE)
+#
+#fig_s_3_d <- HR_maps[["Tulare Lake HR"]] + guides(color = FALSE)
+```
+
+**Combine for full Figure**
+```{r}
+## combine plots
+#fig_s_3_full <- (fig_s_3_a + fig_s_3_b) / (fig_s_3_c + fig_s_3_d)
+#
+#ggsave(fig_s_3_full, file = here("outputs", "figures", "supplement", "fig_s_3_full_v1.png"), 
+#       dpi = 400, bg = "white",
+#       width = 12, height = 12)
+```
+
+## Figure S4
+format data
+```{r}
+
+### upload data
+#abundance_all_cluster <- read.csv(here("data", "interim", "abundance_all_cluster.csv")) %>% 
+#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% #
+#  rename(year = surv_year)
+#
+### make summary 
+#abundance_all_summary <- abundance_all_cluster %>% 
+#  group_by(county, year, month, species) %>% 
+#    summarise(n_traps = n_distinct(trapstation_id),
+#      total_mos = sum(num_clean, na.rm = TRUE),
+#      total_trap_nights = sum(trap_nights, na.rm = TRUE),
+#      mos_per_trap_night = total_mos / total_trap_nights,
+#      .groups = "drop") %>% 
+#  mutate(mos_per_trap_night_log = log(mos_per_trap_night+1))
+```
+
+plot data
+```{r}
+## colors
+#pal_dar3 <- wes_palette("Darjeeling1", 3, type = "continuous")
+#
+#fig_s_4 <- abundance_all_summary %>% 
+#  filter(species != "Cx pipiens/restuans/salinarius") %>% 
+#  ggplot(aes(x = as.integer(year), y = mos_per_trap_night_log)) +
+#  geom_point(aes(color = species),alpha = .1) + 
+#  scale_color_manual(values = rev(pal_dar3)) +
+#  geom_smooth( linewidth = 1.2) +
+#  facet_wrap(~county, scales = "free_y") +
+#  theme_classic(base_size = 13) +
+#  labs(y = "log(mosquitioes/trap night+1)", color = "Species") +
+#  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+#  theme(axis.title.y = element_text(size = 14, face = "bold"),
+#        axis.title.x = element_blank(),
+#        legend.position = "bottom",
+#        legend.title = element_text(size = 14, face = "bold"),
+#        legend.text = element_text(size = 14),
+#        strip.background = element_rect(fill = "grey30", color = NA),
+#        strip.text = element_text(color = "white", face = "bold")) +
+#  scale_x_continuous(breaks = seq(2003,2023, by = 4), limits = c(2003,2023), labels = function(x) #substr(x, 3,4)) 
+#
+#ggsave(fig_s_4, file = here("outputs", "figures", "supplement", "fig_s_4_v1.png"), 
+#       dpi = 400, bg = "white")
+```
+
+
+## Figure S5
+format data
+```{r}
+
+### upload data
+#wnv_all_cluster <- read.csv(here("data", "interim", "wnv_all_cluster.csv")) %>% 
+#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% #
+#  rename(year = surv_year)
+#
+### make summary 
+#wnv_all_summary <- wnv_all_cluster %>% 
+#  group_by(county, year, month, species) %>% 
+#    summarise(n_traps = n_distinct(trapstation_id),
+#              total_pools = n(),
+#              positive_pools = sum(test_status == "Confirmed", na.rm = TRUE),
+#              total_mos_tested = sum(num_clean, na.rm = TRUE),
+#              WNV_MIR = ifelse(total_mos_tested > 0,
+#                               (positive_pools / total_mos_tested)*1000, NA_real_), .groups = "drop") #%>% 
+#  filter(WNV_MIR < 101) %>% 
+#  mutate(WNV_MIR_log = log(WNV_MIR+1))
+```
+
+plot data
+```{r}
+#fig_s_5 <- wnv_all_summary %>% 
+#  filter(species != "Cx pipiens/restuans/salinarius") %>% 
+#  ggplot(aes(x = as.integer(year), y = WNV_MIR_log)) +
+#  geom_point(aes(color = species), alpha = .1) + 
+#  scale_color_manual(values = rev(pal_dar3)) +
+#  geom_smooth( linewidth = 1.2) +
+#  facet_wrap(~county, scales = "free_y") +
+#  theme_classic(base_size = 13) +
+#  labs(y = "log(WNV MIR +1)", color = "Species") +
+#  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+#  theme(axis.title.y = element_text(size = 14, face = "bold"),
+#        axis.title.x = element_blank(),
+#        legend.position = "bottom",
+#        legend.title = element_text(size = 14, face = "bold"),
+#        legend.text = element_text(size = 14),
+#        strip.background = element_rect(fill = "grey30", color = NA),
+#        strip.text = element_text(color = "white", face = "bold")) +
+#  scale_x_continuous(breaks = seq(2003,2023, by = 4), limits = c(2003,2023), labels = function(x) #substr(x, 3,4)) +
+#  coord_cartesian(ylim = c(0, NA))
+#
+#ggsave(fig_s_5, file = here("outputs", "figures", "supplement", "fig_s_5_v1.png"), 
+#       dpi = 400, bg = "white")
+```
+
+## Figure S6
+
+### Part A - soil moisture
+```{r}
+### upload data
+## hydro region
+#counties_sac <- c("Butte", "Glenn", "Colusa", "Yolo", "Sacramento",
+#                  "Placer", "Yuba", "Shasta", "Tehama", "Sutter", "Shasta")
+#counties_sanjoaquin <- c("San Joaquin", "Stanislaus", "Merced","Madera", "Fresno")
+#counties_tulare <- c("Kings", "Tulare", "Kern")
+#
+#county_to_hr <- dplyr::bind_rows(data.frame(county = counties_sac, hydro_region = "Sacramento River #HR"),
+#  data.frame(county = counties_sanjoaquin,hydro_region = "San Joaquin River HR"),
+#  data.frame(county = counties_tulare,hydro_region = "Tulare Lake HR"))
+#
+## soil moisture
+#soilmoisture <- read.csv(here("data", "interim", "covariate_soilmoisture_cluster.csv"))
+#
+#
+#sm <- soilmoisture %>% 
+#  mutate(year_month = as.Date(paste(year, month, 1, sep = "-"))) %>% 
+#  mutate(county = gsub("_.*", "", cluster_id)) %>% 
+#  left_join(county_to_hr, by = "county") 
+#
+#fig_s_6_a <- sm %>%  
+#  filter(!is.na(hydro_region)) %>% 
+#  ggplot(aes(x = year_month, y = soilmoisture, color = hydro_region)) +
+#  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005" )) +
+#  geom_smooth(linewidth = 1.5, fill = "grey90") +
+#  theme_classic(base_size = 13) +
+#  labs(y = "Soil Moisture (m³/m³)", color = "HR") +
+#  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+#  theme(axis.title.y = element_text(size = 14, face = "bold"),
+#        axis.title.x = element_blank(),
+#        legend.position = "bottom",
+#        legend.title = element_text(size = 14, face = "bold"),
+#        legend.text = element_text(size = 14),
+#        #strip.background = element_rect(fill = "grey30", color = NA),
+#        strip.text = element_text(color = "white", face = "bold")) +
+#  scale_x_date(date_breaks = "4 years", date_labels = "%Y", expand = c(0,0)) +
+#  annotate("text", x = as.Date("2004-01-01"), y = .27, label = "A", fontface = "bold", size = 10)
+#  
+```
+
+### Part B - evapotranspiration
+```{r}
+### upload data
+#
+## evapotranspiration
+#evapotranspiration <- read.csv(here("data", "interim", "covariate_et_cluster.csv"))
+#
+#
+#et <- evapotranspiration %>% 
+#  mutate(year_month = as.Date(paste(year, month, 1, sep = "-"))) %>% 
+#  mutate(county = gsub("_.*", "", cluster_id)) %>% 
+#  left_join(county_to_hr, by = "county") 
+#
+#fig_s_6_b <- et %>%  
+#  filter(!is.na(hydro_region)) %>% 
+#  ggplot(aes(x = year_month, y = ET_mm, color = hydro_region)) +
+#  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005" )) +
+#  geom_smooth(linewidth = 1.5, fill = "grey90") +
+#  theme_classic(base_size = 13) +
+#  labs(y = "Evapotranspiration (mm)", color = "HR") +
+#  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+#  theme(axis.title.y = element_text(size = 14, face = "bold"),
+#        axis.title.x = element_blank(),
+#        legend.position = "bottom",
+#        legend.title = element_text(size = 14, face = "bold"),
+#        legend.text = element_text(size = 14),
+#        #strip.background = element_rect(fill = "grey30", color = NA),
+#        strip.text = element_text(color = "white", face = "bold")) +
+#  scale_x_date(date_breaks = "4 years", date_labels = "%Y", expand = c(0,0)) +
+#  annotate("text", x = as.Date("2004-01-01"), y = 34, label = "B", fontface = "bold", size = 10)
+#  
+```
+
+### Part C - Standing water (within 5 km)
+```{r}
+### upload data
+#
+## evapotranspiration
+#jrc_5km <- read.csv(here("data", "interim", "covariate_jrc5km_cluster.csv"))
+#
+#
+#sw_5km <- jrc_5km %>% 
+#  mutate(year_month = as.Date(paste(year, month, 1, sep = "-"))) %>% 
+#  mutate(county = gsub("_.*", "", cluster_id)) %>% 
+#  left_join(county_to_hr, by = "county") 
+#
+#fig_s_6_c <- sw_5km %>%  
+#  filter(!is.na(hydro_region)) %>% 
+#  ggplot(aes(x = year_month, y = jrc_5km, color = hydro_region)) +
+#  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005" )) +
+#  geom_smooth(linewidth = 1.5, fill = "grey90") +
+#  theme_classic(base_size = 13) +
+#  labs(y = "Standing Water (%)", color = "HR") +
+#  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+#  theme(axis.title.y = element_text(size = 14, face = "bold"),
+#        axis.title.x = element_blank(),
+#        legend.position = "bottom",
+#        legend.title = element_text(size = 14, face = "bold"),
+#        legend.text = element_text(size = 14),
+#        #strip.background = element_rect(fill = "grey30", color = NA),
+#        strip.text = element_text(color = "white", face = "bold")) +
+#  scale_x_date(date_breaks = "4 years", date_labels = "%Y", expand = c(0,0)) +
+#  annotate("text", x = as.Date("2004-01-01"), y = 2.5, label = "C", fontface = "bold", size = 10)
+#  
+```
+
+**Combine them for full Fig**
+```{r}
+#fig_s_6_full <- fig_s_6_a + fig_s_6_b + fig_s_6_c + plot_layout(guides = "collect") & #theme(legend.position = "bottom",
+#                                                                            legend.direction = #"horizontal")
+#
+#ggsave(fig_s_6_full, file = here("outputs", "figures", "supplement", "fig_s_6_v1.png"), 
+#       width = 12, height = 8,
+#       dpi = 400, bg = "white")
+```
+
+
+## Figure S7
+```{r}
+### upload data
+## bird competence index
+#bird <- read.csv(here("data", "interim", "covariate_bird_cluster.csv")) 
+#
+#bird_comp <- bird %>% 
+#  mutate(year_month = as.Date(paste(year, month, 1, sep = "-"))) %>% 
+#  mutate(county = gsub("_.*", "", cluster_id)) %>% 
+#  left_join(county_to_hr, by = "county")  %>% 
+#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta")
+#
+#fig_s_7 <- bird_comp %>% 
+#  filter(county != "Yuba") %>% 
+#  ggplot(aes(x = year_month, y = log(bird_comp + 1))) +
+#  geom_point(alpha = .1) + 
+#  scale_color_manual(values = rev(pal_dar3)) +
+#  geom_smooth( linewidth = 1.2) +
+#  facet_wrap(~county, scales = "free_y") +
+#  theme_classic(base_size = 13) +
+#  labs(y = "log(Bird Index+1)") +
+#  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+#  theme(axis.title.y = element_text(size = 14, face = "bold"),
+#        axis.title.x = element_blank(),
+#        legend.position = "bottom",
+#        legend.title = element_text(size = 14, face = "bold"),
+#        legend.text = element_text(size = 14),
+#        strip.background = element_rect(fill = "grey30", color = NA),
+#        strip.text = element_text(color = "white", face = "bold")) +
+#  scale_x_date(date_breaks = "4 years", date_labels = "%Y", expand = c(0,0))
+#
+#
+#ggsave(fig_s_7, file = here("outputs", "figures", "supplement", "fig_s_7_v1.png"), 
+#       dpi = 400, bg = "white")
+```

@@ -1,0 +1,118 @@
+---
+title: "create_paneldata"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(sf)
+library(here)
+
+stations_all <- read.csv(here("data", "interim", "cluster_all_info.csv")) %>% 
+  dplyr::select(-X)
+```
+
+# Create outcomes 
+
+## Abundance
+
+### Make function to create mos per trap night per speces
+```{r}
+abundace_panel_species <- function(data, species_name){
+  data %>% 
+    filter(species == species_name) %>% 
+    group_by(county, cluster_id, surv_year, month) %>% 
+    summarise(n_traps = n_distinct(trapstation_id),
+      total_mos = sum(num_clean, na.rm = TRUE),
+      total_trap_nights = sum(trap_nights, na.rm = TRUE),
+      mos_per_trap_night = total_mos / total_trap_nights,
+      .groups = "drop") %>% 
+    arrange(county, cluster_id, surv_year, month)
+}
+
+```
+
+### Apply function to make individual datasets
+```{r}
+abund_tar_panel <- abundace_panel_species(abundance_all_clustered, "Cx tarsalis")
+abund_pip_panel <- abundace_panel_species(abundance_all_clustered, "Cx pipiens")
+abund_quin_panel <- abundace_panel_species(abundance_all_clustered, "Cx quinquefasciatus")
+
+```
+
+### Save files
+```{r}
+write_csv(abund_tar_panel, here("data", "interim", "abundance_tar_cluster.csv"))
+write_csv(abund_pip_panel, here("data", "interim", "abundance_pip_cluster.csv"))
+write_csv(abund_quin_panel, here("data", "interim", "abundance_quin_cluster.csv"))
+
+```
+
+## WNV MIR
+
+### Make function to create WNV MIR per speces
+```{r}
+wnv_panel_species <- function(data, species_name){
+  data %>% 
+    filter(species == species_name) %>% 
+    group_by(county, cluster_id, surv_year, month) %>% 
+    summarise(n_traps = n_distinct(trapstation_id),
+              total_pools = n(),
+              positive_pools = sum(test_status == "Confirmed", na.rm = TRUE),
+              total_mos_tested = sum(num_clean, na.rm = TRUE),
+              WNV_MIR = ifelse(total_mos_tested > 0,
+                               (positive_pools / total_mos_tested)*1000, NA_real_), .groups = "drop") %>% 
+    arrange(county, cluster_id, surv_year, month)
+}
+
+```
+
+### Apply function to make individual datasets
+```{r}
+wnv_tar_panel <- wnv_panel_species(wnv_all_clustered, "Cx tarsalis")
+wnv_pip_panel <- wnv_panel_species(wnv_all_clustered, "Cx pipiens")
+wnv_quin_panel <- wnv_panel_species(wnv_all_clustered, "Cx quinquefasciatus")
+```
+### Save files
+```{r}
+write_csv(wnv_tar_panel, here("data", "interim", "wnv_tar_cluster.csv"))
+write_csv(wnv_pip_panel, here("data", "interim", "wnv_pip_cluster.csv"))
+write_csv(wnv_quin_panel, here("data", "interim", "wnv_quin_cluster.csv"))
+
+```
+
+# Create covariate data to merge onto outcomes
+
+### slim down station info 
+```{r}
+## slim station info
+stations_all_slim <- stations_all %>% 
+  distinct(cluster_id, .keep_all = TRUE) %>% 
+  dplyr::select(-trapstation_id)
+```
+
+### add hydrological region
+```{r}
+counties_sac <- c("Butte", "Glenn", "Colusa", "Yolo", "Sacramento",
+                  "Placer", "Yuba", "Shasta", "Tehama", "Sutter", "Shasta")
+
+counties_sanjoaquin <- c("San Joaquin", "Stanislaus", "Merced","Madera", "Fresno")
+
+counties_tulare <- c("Kings", "Tulare", "Kern")
+
+county_to_hr <- dplyr::bind_rows(data.frame(county = counties_sac, hydro_region = "Sacramento River HR"),
+  data.frame(county = counties_sanjoaquin,hydro_region = "San Joaquin River HR"),
+  data.frame(county = counties_tulare,hydro_region = "Tulare Lake HR"))
+
+```
+
+### add meta data and covariates to station info
+```{r}
+covariates_full <- read.csv(here("data", "interim","covariates_combined_scalelag.csv"))
+
+station_covariates_full <- stations_all_slim %>% 
+  left_join(county_to_hr, by = "county") %>% 
+  left_join(covariates_full, by = "cluster_id")
+
+write.csv(station_covariates_full, file = here("data" ,"interim", "covariates_scalelag_stationmeta.csv"), row.names = FALSE)
+```
+
