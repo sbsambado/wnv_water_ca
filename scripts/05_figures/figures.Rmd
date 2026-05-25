@@ -825,16 +825,16 @@ plot data
 format data
 ```{r}
 ### upload data
-#counties_sac <- c("Butte", "Glenn", "Colusa", "Yolo", "Sacramento",
-#                  "Placer", "Yuba", "Shasta", "Tehama", "Sutter", "Shasta")
-#counties_sanjoaquin <- c("San Joaquin", "Stanislaus", "Merced","Madera", "Fresno")
-#counties_tulare <- c("Kings", "Tulare", "Kern")
-#
-#county_to_hr <- dplyr::bind_rows(data.frame(county = counties_sac, hydro_region = "Sacramento River #HR"),
-#  data.frame(county = counties_sanjoaquin,hydro_region = "San Joaquin River HR"),
-#  data.frame(county = counties_tulare,hydro_region = "Tulare Lake HR"))
-#
-#
+counties_sac <- c("Butte", "Glenn", "Colusa", "Yolo", "Sacramento",
+                  "Placer", "Yuba", "Shasta", "Tehama", "Sutter", "Shasta")
+counties_sanjoaquin <- c("San Joaquin", "Stanislaus", "Merced","Madera", "Fresno")
+counties_tulare <- c("Kings", "Tulare", "Kern")
+
+county_to_hr <- dplyr::bind_rows(data.frame(county = counties_sac, hydro_region = "Sacramento River #HR"),
+  data.frame(county = counties_sanjoaquin,hydro_region = "San Joaquin River HR"),
+  data.frame(county = counties_tulare,hydro_region = "Tulare Lake HR"))
+
+
 ### select for largish cities
 #cities <- maps::us.cities %>%
 #  filter(country.etc == "CA", pop > 100000) %>%   # adjust threshold
@@ -997,48 +997,50 @@ ggsave(fig_s_4, file = here("outputs", "figures", "supplement", "fig_s_4_v2.png"
 format data
 ```{r}
 
-### upload data
-#wnv_all_cluster <- read.csv(here("data", "interim", "wnv_all_cluster.csv")) %>% 
-#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% #
-#  rename(year = surv_year)
-#
-### make summary 
-#wnv_all_summary <- wnv_all_cluster %>% 
-#  group_by(county, year, month, species) %>% 
-#    summarise(n_traps = n_distinct(trapstation_id),
-#              total_pools = n(),
-#              positive_pools = sum(test_status == "Confirmed", na.rm = TRUE),
-#              total_mos_tested = sum(num_clean, na.rm = TRUE),
-#              WNV_MIR = ifelse(total_mos_tested > 0,
-#                               (positive_pools / total_mos_tested)*1000, NA_real_), .groups = "drop") #%>% 
-#  filter(WNV_MIR < 101) %>% 
-#  mutate(WNV_MIR_log = log(WNV_MIR+1))
+## upload data
+wnv_all_cluster <- read.csv(here("data", "interim", "wnv_all_cluster.csv")) %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% #
+  rename(year = surv_year)
+
+## make summary 
+wnv_all_summary <- wnv_all_cluster %>% 
+  group_by(county, year, month, species) %>% 
+    summarise(n_traps = n_distinct(trapstation_id),
+              total_pools = n(),
+              positive_pools = sum(test_status == "Confirmed", na.rm = TRUE),
+              total_mos_tested = sum(num_clean, na.rm = TRUE),
+              WNV_MIR = ifelse(total_mos_tested > 0,
+                               (positive_pools / total_mos_tested)*1000, NA_real_), .groups = "drop") %>% 
+  filter(WNV_MIR < 101) %>% 
+  mutate(WNV_MIR_log = log(WNV_MIR+1))
 ```
 
 plot data
 ```{r}
-#fig_s_5 <- wnv_all_summary %>% 
-#  filter(species != "Cx pipiens/restuans/salinarius") %>% 
-#  ggplot(aes(x = as.integer(year), y = WNV_MIR_log)) +
-#  geom_point(aes(color = species), alpha = .1) + 
-#  scale_color_manual(values = rev(pal_dar3)) +
-#  geom_smooth( linewidth = 1.2) +
-#  facet_wrap(~county, scales = "free_y") +
-#  theme_classic(base_size = 13) +
-#  labs(y = "log(WNV MIR +1)", color = "Species") +
-#  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
-#  theme(axis.title.y = element_text(size = 14, face = "bold"),
-#        axis.title.x = element_blank(),
-#        legend.position = "bottom",
-#        legend.title = element_text(size = 14, face = "bold"),
-#        legend.text = element_text(size = 14),
-#        strip.background = element_rect(fill = "grey30", color = NA),
-#        strip.text = element_text(color = "white", face = "bold")) +
-#  scale_x_continuous(breaks = seq(2003,2023, by = 4), limits = c(2003,2023), labels = function(x) #substr(x, 3,4)) +
-#  coord_cartesian(ylim = c(0, NA))
-#
-#ggsave(fig_s_5, file = here("outputs", "figures", "supplement", "fig_s_5_v1.png"), 
-#       dpi = 400, bg = "white")
+fig_s_5 <- wnv_all_summary %>% 
+  filter(species == "Cx tarsalis") %>% 
+  #filter(species != "Cx pipiens/restuans/salinarius") %>% 
+  ggplot(aes(x = as.integer(year), y = WNV_MIR_log)) +
+  geom_point(alpha = .1, color = "#F2AD00") + 
+  #geom_point(aes(color = species), alpha = .1) + 
+  scale_color_manual(values = rev(pal_dar3)) +
+  geom_smooth( linewidth = 1.2) +
+  facet_wrap(~county, scales = "free_y") +
+  theme_classic(base_size = 13) +
+  labs(y = "log(WNV MIR +1)", color = "Species") +
+  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+  theme(axis.title.y = element_text(size = 14, face = "bold"),
+        axis.title.x = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_text(size = 14, face = "bold"),
+        legend.text = element_text(size = 14),
+        strip.background = element_rect(fill = "grey30", color = NA),
+        strip.text = element_text(color = "white", face = "bold")) +
+  scale_x_continuous(breaks = seq(2003,2023, by = 4), limits = c(2003,2023), labels = function(x) substr(x,3,4)) +
+  coord_cartesian(ylim = c(0, NA))
+
+ggsave(fig_s_5, file = here("outputs", "figures", "supplement", "fig_s_5_v2.png"), 
+       dpi = 400, bg = "white")
 ```
 
 ## Figure S6
@@ -1164,20 +1166,20 @@ plot data
 
 ## Figure S7
 ```{r}
-### upload data
-## bird competence index
-#bird <- read.csv(here("data", "interim", "covariate_bird_cluster.csv")) 
-#
-#bird_comp <- bird %>% 
-#  mutate(year_month = as.Date(paste(year, month, 1, sep = "-"))) %>% 
-#  mutate(county = gsub("_.*", "", cluster_id)) %>% 
-#  left_join(county_to_hr, by = "county")  %>% 
-#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta")
-#
+## upload data
+# bird competence index
+bird <- read.csv(here("data", "interim", "covariate_bird_cluster.csv")) 
+
+bird_comp <- bird %>% 
+  mutate(year_month = as.Date(paste(year, month, 1, sep = "-"))) %>% 
+  mutate(county = gsub("_.*", "", cluster_id)) %>% 
+  left_join(county_to_hr, by = "county")  %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta")
+
 #fig_s_7 <- bird_comp %>% 
 #  filter(county != "Yuba") %>% 
 #  ggplot(aes(x = year_month, y = log(bird_comp + 1))) +
-#  geom_point(alpha = .1) + 
+#   geom_point(alpha = .1, color = "#F2AD00") + 
 #  scale_color_manual(values = rev(pal_dar3)) +
 #  geom_smooth( linewidth = 1.2) +
 #  facet_wrap(~county, scales = "free_y") +
@@ -1192,8 +1194,35 @@ plot data
 #        strip.background = element_rect(fill = "grey30", color = NA),
 #        strip.text = element_text(color = "white", face = "bold")) +
 #  scale_x_date(date_breaks = "4 years", date_labels = "%Y", expand = c(0,0))
-#
-#
+
+
 #ggsave(fig_s_7, file = here("outputs", "figures", "supplement", "fig_s_7_v1.png"), 
 #       dpi = 400, bg = "white")
+
+## another version that erin suggested
+pal_bigsur <- cal_palette(name = "bigsur", n = 16, type = "continuous")
+
+fig_s_7 <- bird_comp %>% 
+  filter(county != "Yuba") %>% 
+  ggplot(aes(x = year_month, y = log(bird_comp + 1))) +
+  geom_point(alpha = .08, size = 0.8, aes(color = county)) + 
+  scale_color_manual(values = rev(pal_bigsur)) +
+  #scale_color_manual(values = rev(pal_dar3)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, k = 30), linewidth = 1.5) +
+  #facet_wrap(~county, scales = "free_y") +
+  theme_classic(base_size = 13) +
+  labs(y = "log(Bird Index+1)", color = "County") +
+  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+  theme(axis.title.y = element_text(size = 14, face = "bold"),
+        axis.title.x = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_text(size = 14, face = "bold"),
+        legend.text = element_text(size = 14),
+        strip.background = element_rect(fill = "grey30", color = NA),
+        strip.text = element_text(color = "white", face = "bold")) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y", expand = c(0,0)) +
+  guides(color = guide_legend(nrow = 2, override.aes = list(alpha = 1, size = 3)))
+  
+ggsave(fig_s_7, file = here("outputs", "figures", "supplement", "fig_s_7_v2.png"), 
+       dpi = 400, bg = "white", width = 10.5)
 ```
