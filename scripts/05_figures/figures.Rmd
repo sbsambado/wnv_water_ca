@@ -946,47 +946,50 @@ format data
 ```{r}
 
 ### upload data
-#abundance_all_cluster <- read.csv(here("data", "interim", "abundance_all_cluster.csv")) %>% 
-#  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% #
-#  rename(year = surv_year)
-#
-### make summary 
-#abundance_all_summary <- abundance_all_cluster %>% 
-#  group_by(county, year, month, species) %>% 
-#    summarise(n_traps = n_distinct(trapstation_id),
-#      total_mos = sum(num_clean, na.rm = TRUE),
-#      total_trap_nights = sum(trap_nights, na.rm = TRUE),
-#      mos_per_trap_night = total_mos / total_trap_nights,
-#      .groups = "drop") %>% 
-#  mutate(mos_per_trap_night_log = log(mos_per_trap_night+1))
+abundance_all_cluster <- read.csv(here("data", "interim", "abundance_all_cluster.csv")) %>% 
+  filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% #
+  rename(year = surv_year)
+
+## make summary 
+abundance_all_summary <- abundance_all_cluster %>% 
+  group_by(county, year, month, species) %>% 
+    summarise(n_traps = n_distinct(trapstation_id),
+      total_mos = sum(num_clean, na.rm = TRUE),
+      total_trap_nights = sum(trap_nights, na.rm = TRUE),
+      mos_per_trap_night = total_mos / total_trap_nights,
+      .groups = "drop") %>% 
+  mutate(mos_per_trap_night_log = log(mos_per_trap_night+1))
 ```
 
 plot data
 ```{r}
 ## colors
-#pal_dar3 <- wes_palette("Darjeeling1", 3, type = "continuous")
-#
-#fig_s_4 <- abundance_all_summary %>% 
-#  filter(species != "Cx pipiens/restuans/salinarius") %>% 
-#  ggplot(aes(x = as.integer(year), y = mos_per_trap_night_log)) +
-#  geom_point(aes(color = species),alpha = .1) + 
-#  scale_color_manual(values = rev(pal_dar3)) +
-#  geom_smooth( linewidth = 1.2) +
-#  facet_wrap(~county, scales = "free_y") +
-#  theme_classic(base_size = 13) +
-#  labs(y = "log(mosquitioes/trap night+1)", color = "Species") +
-#  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
-#  theme(axis.title.y = element_text(size = 14, face = "bold"),
-#        axis.title.x = element_blank(),
-#        legend.position = "bottom",
-#        legend.title = element_text(size = 14, face = "bold"),
-#        legend.text = element_text(size = 14),
-#        strip.background = element_rect(fill = "grey30", color = NA),
-#        strip.text = element_text(color = "white", face = "bold")) +
-#  scale_x_continuous(breaks = seq(2003,2023, by = 4), limits = c(2003,2023), labels = function(x) #substr(x, 3,4)) 
-#
-#ggsave(fig_s_4, file = here("outputs", "figures", "supplement", "fig_s_4_v1.png"), 
-#       dpi = 400, bg = "white")
+pal_dar3 <- wes_palette("Darjeeling1", 3, type = "continuous")
+
+fig_s_4 <- abundance_all_summary %>% 
+  filter(species == "Cx tarsalis") %>% 
+  #filter(species != "Cx pipiens/restuans/salinarius") %>% 
+  ggplot(aes(x = as.integer(year), y = mos_per_trap_night_log)) +
+  geom_point(alpha = .1, color = "#F2AD00") + 
+  #geom_point(aes(color = species),alpha = .1) + 
+  #scale_color_manual(values = rev(pal_dar3)) +
+  geom_smooth( linewidth = 1.2) +
+  facet_wrap(~county, scales = "free_y") +
+  theme_classic(base_size = 13) +
+  labs(y = "log(mosquitioes/trap night+1)", color = "Species") +
+  guides(color = guide_legend(override.aes = list(alpha = 1))) + 
+  theme(axis.title.y = element_text(size = 14, face = "bold"),
+        axis.title.x = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_text(size = 14, face = "bold"),
+        legend.text = element_text(size = 14),
+        strip.background = element_rect(fill = "grey30", color = NA),
+        strip.text = element_text(color = "white", face = "bold")) +
+  scale_x_continuous(breaks = seq(2003,2023, by = 4), limits = c(2003,2023), labels = function(x) substr(x, 3,4)) 
+
+ggsave(fig_s_4, file = here("outputs", "figures", "supplement", "fig_s_4_v2.png"), 
+       dpi = 400, bg = "white")
+
 ```
 
 
