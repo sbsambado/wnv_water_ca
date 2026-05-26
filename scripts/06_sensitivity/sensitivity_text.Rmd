@@ -1730,6 +1730,7 @@ station_covariates_filtered <- station_covariates_full %>%
 ## upload culex pipiens data
 abund_pip_panel_full <- read.csv(here("data", "interim", "abundance_pip_cluster.csv"))
 
+
 abund_pip_panel_filtered <- abund_pip_panel_full %>% 
   filter(county != "Riverside" & county != "Los Angeles" & county != "Orange" & county != "Shasta") %>% 
   filter(month %in% 4:10) %>% 
@@ -1911,6 +1912,17 @@ abund_tar_panel_outside <- abund_tar_panel_full %>%
   left_join(station_covariates_full2 %>% dplyr::select(-county), by = c("cluster_id", "year", "month"))
 
 #unique(abund_tar_panel_outside$county)
+
+## now just ag based counties
+abund_tar_panel_agoutside <- abund_tar_panel_full %>% 
+  filter(county == "Riverside" | county == "Shasta") %>% 
+    #filter(county != "Los Angeles" | county != "Orange") %>% 
+  filter(month %in% 4:10) %>% 
+  dplyr::rename(year = surv_year) %>% 
+  mutate(county = as.factor(county),
+         year = as.factor(year),
+         month = as.factor(month)) %>% 
+  left_join(station_covariates_full2 %>% dplyr::select(-county), by = c("cluster_id", "year", "month"))
 ```
 
 run models
@@ -1940,6 +1952,19 @@ mod_fe_abund_pdsi_tar_outside <- feols(log(mos_per_trap_night + 1) ~ pdsi_lag0 +
 summary(mod_fe_abund_pdsi_tar_outside)
 confint(mod_fe_abund_pdsi_tar_outside, level = 0.95)
 etable(mod_fe_abund_pdsi_tar_outside)
+
+
+## ag counties
+# build model
+mod_fe_abund_pdsi_tar_agoutside <- feols(log(mos_per_trap_night + 1) ~ pdsi_lag0 + temp_lag0 + I(temp_lag0^2) |
+                             cluster_id + year + month,
+                           vcov = conley(5),
+                           data = abund_tar_panel_agoutside)
+
+# check summary
+summary(mod_fe_abund_pdsi_tar_agoutside)
+confint(mod_fe_abund_pdsi_tar_agoutside, level = 0.95)
+etable(mod_fe_abund_pdsi_tar_agoutside)
 
 ```
 

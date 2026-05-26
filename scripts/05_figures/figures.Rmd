@@ -502,88 +502,90 @@ plot data
 ### Part A - Overall effect of PDSI
 format data
 ```{r}
-### upload model results
-#mod_fe_abund_pdsi <- readRDS(here("outputs", "models", "mod_fe_abund_pdsi.rds"))
-#mod_fe_wnv_pdsi <- readRDS(here("outputs", "models", "mod_fe_wnv_pdsi.rds"))
-#
-### make one 
-#abund_pdsi_coef <- broom::tidy(mod_fe_abund_pdsi) %>% 
-#  filter(term == "pdsi_lag0") %>% 
-#  mutate(outcome = "Abundance")
-#
-#wnv_pdsi_coef <- broom::tidy(mod_fe_wnv_pdsi) %>% 
-#  filter(term == "pdsi_lag0") %>% 
-#  mutate(outcome = "WNV MIR")
-#  
-#pdsi_coef <- bind_rows(abund_pdsi_coef, wnv_pdsi_coef)
+## upload model results
+mod_fe_abund_pdsi <- readRDS(here("outputs", "models", "mod_fe_abund_pdsi.rds"))
+mod_fe_wnv_pdsi <- readRDS(here("outputs", "models", "mod_fe_wnv_pdsi.rds"))
+
+## make one 
+abund_pdsi_coef <- broom::tidy(mod_fe_abund_pdsi) %>% 
+  filter(term == "pdsi_lag0") %>% 
+  mutate(outcome = "Abundance")
+
+wnv_pdsi_coef <- broom::tidy(mod_fe_wnv_pdsi) %>% 
+  filter(term == "pdsi_lag0") %>% 
+  mutate(outcome = "WNV MIR")
+  
+pdsi_coef <- bind_rows(abund_pdsi_coef, wnv_pdsi_coef)
 ```
 
 plot data
 ```{r}
-#fig_3_a <- pdsi_coef %>% 
-#  ggplot(aes(x = outcome, y = estimate, color = outcome)) +
-#  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
-#                    ymax = estimate + 1.96 * std.error),width = 0.15, linewidth = 2) +
-#  geom_point(size = 6.5) +
-#  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
-#  scale_color_manual(values = c( "Abundance" = "#007fff", "WNV MIR" ="#007fff" )) +# "#0047ab""#098154"
-#  theme_minimal(base_size = 18) +
-#  labs(x = "",y = "Effect of PDSI") +
-#  theme(axis.title = element_text(face = "bold"),
-#    axis.text.x = element_text(size = 18),
-#    axis.text.y = element_text(size = 18),
-#    panel.grid.minor = element_blank(),
-#    legend.position = "none") +
-#  annotate("text", x = .5, y = 0.18, label = "A", fontface = "bold", size = 10)
-#
+fig_3_a <- pdsi_coef %>% 
+  ggplot(aes(x = outcome, y = estimate, color = outcome)) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),width = 0.15, linewidth = 2) +
+  geom_point(size = 6.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c( "Abundance" = "#007fff", "WNV MIR" ="#007fff" )) +# "#0047ab""#098154"
+  theme_classic(base_size = 18) +
+  #theme_minimal(base_size = 18) +
+  labs(x = "",y = "Effect of PDSI") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.position = "none") #+
+  annotate("text", x = .5, y = 0.18, label = "A", fontface = "bold", size = 10)
+
 #ggsave(fig_3_a, file = here("outputs", "figures", "main", "fig_3_a_v1.png"), dpi = 400, bg = "white")
 ```
 
 ### Part B - Spatial heterogeneity of PDSI
 format data
 ```{r}
-#mod_fe_abund_pdsi_HR <- readRDS(here("outputs", "models", "mod_fe_abund_pdsi_HR.rds"))
-#mod_fe_wnv_pdsi_HR <- readRDS(here("outputs", "models", "mod_fe_wnv_pdsi_HR.rds"))
-#
-#abund_pdsi_HR_coef <- broom::tidy(mod_fe_abund_pdsi_HR) %>% 
-#  mutate(outcome = "Abundance")  %>% 
-#  filter(grepl("hydro_region::", term)) %>% 
-#  mutate(hydro_region = gsub("hydro_region::", "", term),
-#         hydro_region = gsub("HR:pdsi_lag0", "", hydro_region),
-#         lower = estimate - 1.96 * std.error,
-#         upper = estimate + 1.96 * std.error)
-#
-#wnv_pdsi_HR_coef <- broom::tidy(mod_fe_wnv_pdsi_HR) %>% 
-#  mutate(outcome = "WNV MIR")  %>% 
-#  filter(grepl("hydro_region::", term)) %>% 
-#  mutate(hydro_region = gsub("hydro_region::", "", term),
-#         hydro_region = gsub("HR:pdsi_lag0", "", hydro_region),
-#         lower = estimate - 1.96 * std.error,
-#         upper = estimate + 1.96 * std.error) 
-#
-#pdsi_HR_coef <- bind_rows(abund_pdsi_HR_coef, wnv_pdsi_HR_coef) 
+mod_fe_abund_pdsi_HR <- readRDS(here("outputs", "models", "mod_fe_abund_pdsi_HR.rds"))
+mod_fe_wnv_pdsi_HR <- readRDS(here("outputs", "models", "mod_fe_wnv_pdsi_HR.rds"))
+
+abund_pdsi_HR_coef <- broom::tidy(mod_fe_abund_pdsi_HR) %>% 
+  mutate(outcome = "Abundance")  %>% 
+  filter(grepl("hydro_region::", term)) %>% 
+  mutate(hydro_region = gsub("hydro_region::", "", term),
+         hydro_region = gsub("HR:pdsi_lag0", "", hydro_region),
+         lower = estimate - 1.96 * std.error,
+         upper = estimate + 1.96 * std.error)
+
+wnv_pdsi_HR_coef <- broom::tidy(mod_fe_wnv_pdsi_HR) %>% 
+  mutate(outcome = "WNV MIR")  %>% 
+  filter(grepl("hydro_region::", term)) %>% 
+  mutate(hydro_region = gsub("hydro_region::", "", term),
+         hydro_region = gsub("HR:pdsi_lag0", "", hydro_region),
+         lower = estimate - 1.96 * std.error,
+         upper = estimate + 1.96 * std.error) 
+
+pdsi_HR_coef <- bind_rows(abund_pdsi_HR_coef, wnv_pdsi_HR_coef) 
 ```
 
 plot data
 ```{r}
-#fig_3_b <- pdsi_HR_coef %>% 
-#  ggplot(aes(x = outcome, y = estimate, color = hydro_region)) +
-#  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
-#                    ymax = estimate + 1.96 * std.error),width = 0.35, linewidth = 2,
-#                position = position_dodge(width = 0.65)) +
-#  geom_point(size = 6.5,position = position_dodge(width = 0.65)) +
-#  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
-#  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005" )) +
-#  theme_minimal(base_size = 18) +
-#  labs(x = "",y = "Effect of PDSI", color = "Hydrological Region") +
-#  theme(axis.title = element_text(face = "bold"),
-#    axis.text.x = element_text(size = 18),
-#    axis.text.y = element_text(size = 18),
-#    panel.grid.minor = element_blank(),
-#    legend.title = element_text(face = "bold"),
-#    legend.position = "right") +
-#  annotate("text", x = .5, y = 0.33, label = "B", fontface = "bold", size = 10)
-#
+fig_3_b <- pdsi_HR_coef %>% 
+  ggplot(aes(x = outcome, y = estimate, color = hydro_region)) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),width = 0.35, linewidth = 2,
+                position = position_dodge(width = 0.65)) +
+  geom_point(size = 6.5,position = position_dodge(width = 0.65)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005" )) +
+  theme_classic(base_size = 18) +
+  #theme_minimal(base_size = 18) +
+  labs(x = "",y = "Effect of PDSI", color = "Hydrological Region") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.title = element_text(face = "bold"),
+    legend.position = "right") +
+  annotate("text", x = .5, y = 0.33, label = "B", fontface = "bold", size = 10)
+
 #ggsave(fig_3_b, file = here("outputs", "figures", "main", "fig_3_b_v1.png"), dpi = 400, bg = "white")
 ```
 
@@ -591,79 +593,80 @@ plot data
 ### Part C - Hydrological variable associations
 format data
 ```{r}
+## upload model results
+mod_fe_abund_hydro_withlags <- readRDS(here("outputs", "models", "mod_fe_abund_hydro_withlags.rds"))
+mod_fe_wnv_hydro_withlags <- readRDS(here("outputs", "models", "mod_fe_wnv_hydro_withlags.rds"))
 
-### upload model results
-#mod_fe_abund_hydro_withlags <- readRDS(here("outputs", "models", "mod_fe_abund_hydro_withlags.rds"))
-#mod_fe_wnv_hydro_withlags <- readRDS(here("outputs", "models", "mod_fe_wnv_hydro_withlags.rds"))
-#
-### make into tables
-#abund_hydro_coef <- map2_df(mod_fe_abund_hydro_withlags, names(mod_fe_abund_hydro_withlags), ~ {
-#  tidy(.x) %>%
-#    filter(term == .y) %>%   # match the variable to its model
-#    mutate(hydro_var = .y,
-#           outcome = "Abundance")
-#})
-#
-#wnv_hydro_coef <- map2_df(mod_fe_wnv_hydro_withlags, names(mod_fe_wnv_hydro_withlags), ~ {
-#  tidy(.x) %>%
-#    filter(term == .y) %>%   # match the variable to its model
-#    mutate(hydro_var = .y,
-#           outcome = "WNV MIR")
-#})
-#
-#
-#both_hydro_coef <- bind_rows(abund_hydro_coef, wnv_hydro_coef) %>% 
-#  mutate(lag = case_when(grepl("lag0", term) ~ "0 mo",
-#                         grepl("lag1", term) ~ "1 mo",
-#                         grepl("lag2", term) ~ "2 mo",
-#                         grepl("lag3", term) ~ "3 mo",
-#                         TRUE ~ NA_character_)) %>% 
-#  mutate(hydro_var = case_when(grepl("soilmoisture", hydro_var) ~ "Soil Moisture",
-#                               grepl("et", hydro_var) ~ "Evapotranspiration",
-#                               grepl("jrc_5km", hydro_var) ~ "Standing Water",
-#                               grepl("jrc_10km", hydro_var) ~ "Standing Water (10km)",
-#                               TRUE ~ NA_character_))
-#
+## make into tables
+abund_hydro_coef <- map2_df(mod_fe_abund_hydro_withlags, names(mod_fe_abund_hydro_withlags), ~ {
+  tidy(.x) %>%
+    filter(term == .y) %>%   # match the variable to its model
+    mutate(hydro_var = .y,
+           outcome = "Abundance")
+})
+
+wnv_hydro_coef <- map2_df(mod_fe_wnv_hydro_withlags, names(mod_fe_wnv_hydro_withlags), ~ {
+  tidy(.x) %>%
+    filter(term == .y) %>%   # match the variable to its model
+    mutate(hydro_var = .y,
+           outcome = "WNV MIR")
+})
+
+
+both_hydro_coef <- bind_rows(abund_hydro_coef, wnv_hydro_coef) %>% 
+  mutate(lag = case_when(grepl("lag0", term) ~ "0 mo",
+                         grepl("lag1", term) ~ "1 mo",
+                         grepl("lag2", term) ~ "2 mo",
+                         grepl("lag3", term) ~ "3 mo",
+                         TRUE ~ NA_character_)) %>% 
+  mutate(hydro_var = case_when(grepl("soilmoisture", hydro_var) ~ "Soil Moisture",
+                               grepl("et", hydro_var) ~ "Evapotranspiration",
+                               grepl("jrc_5km", hydro_var) ~ "Standing Water",
+                               grepl("jrc_10km", hydro_var) ~ "Standing Water (10km)",
+                               TRUE ~ NA_character_))
+
 #write.csv(both_hydro_coef, here("outputs", "models", "both_hydro_coef.csv"), row.names = FALSE)
 ```
 
 plot data
 ```{r}
+hydro_colors <- c(  
+  "Soil Moisture" =     "#D3105C" , 
+  "Evapotranspiration" = "#3A5D3D",
+  "Standing Water" =  "#4C4976",
+  "Standing Water (10km)" = "#D87B82")
 
-#hydro_colors <- c(  
-#  "Soil Moisture" =     "#D3105C" , 
-#  "Evapotranspiration" = "#3A5D3D",
-#  "Standing Water" =  "#4C4976",
-#  "Standing Water (10km)" = "#D87B82")
-#
-#lag_alpha <- c("0 mo" = 1,
-#               "1 mo" = 0.75,
-#               "2 mo" = 0.55,
-#               "3 mo" = 0.35)
-#
-#fig_3_c <- both_hydro_coef %>% 
-#  filter(hydro_var != "Standing Water (10km)") %>% 
-#  mutate(hydro_var = factor(hydro_var,
-#                               levels = c("Soil Moisture","Standing Water", "Evapotranspiration" ))) #%>% 
-#  ggplot(aes(x = outcome, y = estimate, color = hydro_var, alpha = lag)) +
-#  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
-#                    ymax = estimate + 1.96 * std.error),width = 0.35, linewidth = 2,
-#                position = position_dodge(width = 0.65)) +
-#  geom_point(size = 4.5,position = position_dodge(width = 0.65)) +
-#  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
-#  scale_color_manual(values = c(hydro_colors)) +
-#  scale_alpha_manual(values = lag_alpha) +
-#  theme_minimal(base_size = 18) +
-#  labs(x = "",y = "Coefficient Estimate", alpha = "Month Lag") +
-#  theme(axis.title = element_text(face = "bold"),
-#    axis.text.x = element_text(size = 18),
-#    axis.text.y = element_text(size = 18),
-#    panel.grid.minor = element_blank(),
-#    legend.title = element_text(face = "bold"),
-#    legend.position = "bottom",
-#    strip.text = element_text(face = "bold", size = 20)) +
-#  facet_wrap(~hydro_var, ncol = 3) +
-#  guides(color = FALSE) 
+lag_alpha <- c("0 mo" = 1,
+               "1 mo" = 0.75,
+               "2 mo" = 0.55,
+               "3 mo" = 0.35)
+
+fig_3_c <- both_hydro_coef %>% 
+  filter(hydro_var != "Standing Water (10km)") %>% 
+  mutate(hydro_var = factor(hydro_var,
+                               levels = c("Soil Moisture","Standing Water", "Evapotranspiration" ))) %>% 
+  ggplot(aes(x = outcome, y = estimate, color = hydro_var, alpha = lag)) +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error),width = 0.35, linewidth = 2,
+                position = position_dodge(width = 0.65)) +
+  geom_point(size = 4.5,position = position_dodge(width = 0.65)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 1, color = "grey10") +
+  scale_color_manual(values = c(hydro_colors)) +
+  scale_alpha_manual(values = lag_alpha) +
+  theme_classic(base_size = 18) +
+  #theme_minimal(base_size = 18) +
+  labs(x = "",y = "Coefficient Estimate", alpha = "Month Lag") +
+  theme(axis.title = element_text(face = "bold"),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    panel.grid.minor = element_blank(),
+    legend.title = element_text(face = "bold"),
+    legend.position = "bottom",
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 20)) +
+  facet_wrap(~hydro_var, ncol = 3) +
+  guides(color = FALSE) + 
+  geom_vline(xintercept = 1.5, color = "grey85", linetype = "dotted")
 
 ```
 
@@ -685,6 +688,24 @@ plot data
 #       width = 13, height = 10, 
 #       dpi = 400, bg = "white")
 #
+```
+
+another version of the combined figure (erin & alex's suggestions)
+```{r}
+## standardize y-axis & add grey dashed line
+fig_3_a_v3 <- fig_3_a + scale_y_continuous(limits = c(-0.13, 0.31)) + geom_vline(xintercept = 1.5, color = "grey85", linetype = "dotted")
+fig_3_b_v3 <- fig_3_b + scale_y_continuous(limits = c(-0.13, 0.31)) + geom_vline(xintercept = 1.5, color = "grey85", linetype = "dotted")
+
+# move legend to right to match top row 
+fig_3_c_v3 <- fig_3_c + theme(legend.position = "right")
+
+# plot them together
+fig_3_full <- (fig_3_a_v3 + fig_3_b_v3)/ fig_3_c_v3 +
+  plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(size = 28, face = "bold"))
+
+ggsave(fig_3_full, file = here("outputs", "figures", "main", "fig_3_full_v4.png"),
+       width = 13, height = 10, 
+       dpi = 400, bg = "white")
 ```
 
 
