@@ -98,37 +98,38 @@ plot data
 format data
 ```{r}
 #### wrangle data 
-## need to make loop to call in
-#prism_tif_files <- list.files(here("data", "raw", "public", "prism_normals_precip_800m_monthly"), 
-#                              pattern = "\\.tif$", full.names = TRUE, recursive = TRUE)
-#prism_tif_files <- sort(prism_tif_files) # make sure its 01-12
-#prism_monthly <- terra::rast(prism_tif_files)
-#
-## make month name from file name
-#month_nums <- str_extract(prism_tif_files, "(?<=_)\\d{6}(?=_)") #this gives yearmonth 
-#month_nums <- substr(month_nums, 5,6) # this extracts month
-#names(prism_monthly) <- paste0("X", as.numeric(month_nums)) # change column names
-#
-### align crs, crop, mask
-#ca_prism_vect <- vect(st_transform(ca, crs(prism_monthly)))
-#prism_monthly_crop <- crop(prism_monthly,ca_prism_vect)
-#prism_monthly_mask <- mask(prism_monthly_crop, ca_prism_vect)
-#
-### align hydro region (HR)
-#HR_prism <- st_read(here("data", "spatial_boundaries", "i03_Hydrologic_Regions", #"i03_Hydrologic_Regions.shp")) %>% 
-#  st_transform(st_crs(prism_monthly_mask))
-#HR_prism_vect <- vect(HR_prism)
-#
-### extract precip per HR
-#HR_prism_monthly <- terra::extract(prism_monthly_mask, HR_prism_vect, fun = mean, na.rm = TRUE)
-#
-### make tidy format
-#HR_prism_monthly_df <- HR_prism_monthly %>% 
-#  mutate(region = HR_prism_vect$HR_NAME) %>% 
-#  group_by(region) %>% 
-#  summarise(across(starts_with("X"), mean, na.rm = TRUE)) %>% 
-#  pivot_longer(cols = starts_with("X"), names_to = "month", values_to = "precip") %>% 
-#  mutate(month = factor(as.numeric(gsub("X", "", month)), levels = 1:12, labels = month.abb))
+# need to make loop to call in
+prism_tif_files <- list.files(here("data", "raw", "public", "prism_normals_precip_800m_monthly"), 
+                              pattern = "\\.tif$", full.names = TRUE, recursive = TRUE)
+prism_tif_files <- sort(prism_tif_files) # make sure its 01-12
+prism_monthly <- terra::rast(prism_tif_files)
+
+# make month name from file name
+month_nums <- str_extract(prism_tif_files, "(?<=_)\\d{6}(?=_)") #this gives yearmonth 
+month_nums <- substr(month_nums, 5,6) # this extracts month
+names(prism_monthly) <- paste0("X", as.numeric(month_nums)) # change column names
+
+## align crs, crop, mask
+ca_prism_vect <- vect(st_transform(ca, crs(prism_monthly)))
+prism_monthly_crop <- crop(prism_monthly,ca_prism_vect)
+prism_monthly_mask <- mask(prism_monthly_crop, ca_prism_vect)
+
+## align hydro region (HR)
+HR_prism <- st_read(here("data", "spatial_boundaries", "i03_Hydrologic_Regions", "i03_Hydrologic_Regions.shp")) %>%
+  st_transform(st_crs(prism_monthly_mask))
+
+HR_prism_vect <- vect(HR_prism)
+
+## extract precip per HR
+HR_prism_monthly <- terra::extract(prism_monthly_mask, HR_prism_vect, fun = mean, na.rm = TRUE)
+
+## make tidy format
+HR_prism_monthly_df <- HR_prism_monthly %>% 
+  mutate(region = HR_prism_vect$HR_NAME) %>% 
+  group_by(region) %>% 
+  summarise(across(starts_with("X"), mean, na.rm = TRUE)) %>% 
+  pivot_longer(cols = starts_with("X"), names_to = "month", values_to = "precip") %>% 
+  mutate(month = factor(as.numeric(gsub("X", "", month)), levels = 1:12, labels = month.abb))
 ```
 
 plot data
@@ -166,61 +167,64 @@ save top figure for presentations
 ### Part C - Water features
 format data
 ```{r}
-### get everything in the correct crs
-#target_crs <- 3310
-#cv_3310 <- st_transform(cv, target_crs)
-#
-### rivers 
-#rivers_major <- st_read(here("data","raw", "public", "NHD_Major_Rivers","NHD_Major_Rivers.shp" )) %>% 
-#  st_zm(drop = TRUE) %>% 
-#  st_transform(target_crs)
-#
-## only select rivers within central valley
-#rivers_major_cv <- st_intersection(rivers_major, cv_3310) 
-#
-### wetlands
-#wetlands <- st_read(here("data","raw", "public", "wetlands_cv.gpkg"), layer = "CA_Wetlands") %>%
-#  st_transform(target_crs)
-#
-### hr regions
-#HR_cv <- st_read(here("data", "spatial_boundaries", "i03_Hydrologic_Regions", #"i03_Hydrologic_Regions.shp")) %>% 
-#  st_transform(st_crs(cv_3310))
-## only plot
-#HR_cv_clip <- st_intersection(HR_cv, cv_3310)
-#
+## get everything in the correct crs
+target_crs <- 3310
+cv_3310 <- st_transform(cv, target_crs)
+
+## rivers 
+rivers_major <- st_read(here("data","raw", "public", "NHD_Major_Rivers","NHD_Major_Rivers.shp" )) %>% 
+  st_zm(drop = TRUE) %>% 
+  st_transform(target_crs)
+
+# only select rivers within central valley
+rivers_major_cv <- st_intersection(rivers_major, cv_3310) 
+
+## wetlands
+wetlands <- st_read(here("data","raw", "public", "wetlands_cv.gpkg"), layer = "CA_Wetlands") %>%
+  st_transform(target_crs)
+
+## hr regions
+HR_cv <- st_read(here("data", "spatial_boundaries", "i03_Hydrologic_Regions", "i03_Hydrologic_Regions.shp")) %>% 
+  st_transform(st_crs(cv_3310))
+  
+# only plot
+HR_cv_clip <- st_intersection(HR_cv, cv_3310)
+
 ```
 
 plot data
 ```{r}
-## set basin colors
-#HR_colors <- ifelse(HR_cv_clip$HR_NAME == "Sacramento River", alpha("#ADC397", 0.4),
-#                    ifelse(HR_cv_clip$HR_NAME == "San Joaquin River", alpha("#DFBF2B", 0.4),
-#                           ifelse(HR_cv_clip$HR_NAME == "Tulare Lake", alpha("#EA8005", 0.4),
-#                                  "#f0f0f0")))
-#
-#
-#fig_1_c <- ggplot() +
-#  geom_sf(data = ca, fill = "grey97", color = NA, size = 0.3) +
-#    geom_sf(data = cv_3310, fill = "white", color = "black", size = 0.6) +
-#  geom_sf(data = HR_cv_clip, fill = HR_colors, color = NA) +
-#  # add water features
-#  geom_sf(data = rivers_major_cv, aes(linetype = "Rivers"), color = "#1D91C0", linewidth = 0.8) +
-#  geom_sf(data = wetlands, aes(fill = "Wetlands"), color = NA) +
-#  # make manual legend
-#  scale_fill_manual(name = "Water Features", values = c("Wetlands" = "#2CA25F")) +
-#  scale_linetype_manual(name = "", values = c("Rivers" = 1)) +
-#  guides(linetype = guide_legend(override.aes = list(linewidth = 4)))+
-#  theme_style +
-#  theme(legend.text = element_text(size = 15),
-#        legend.title = element_text(size = 14, face = "bold"),
-#        legend.position =c(0.86,.87))  +
-#  coord_sf(xlim = c(-122.7, -118.4), ylim = c(34.7, 40.4), crs = 4326, expand = FALSE)  +
-#  annotate("text", x = -120.5, y = 40.1, label = "C", fontface = "bold", size = 10) +
-#  annotate("text", x = -120.8, y = 39.4, label = "Sac.\nRiver\nHR", size = 8) +
-#  annotate("text", x = -119.8, y = 38, label = "San\nJoaquin\nRiver\nHR", size = 8) +
-#  annotate("text", x = -121.0, y = 36, label = "Tulare\nLake\nHR", size = 8)
-#
-#ggsave(fig_1_c, file = here("outputs", "figures", "main", "fig_1_c_v1.png"), dpi = 400, bg = "white")
+# set basin colors
+HR_colors <- ifelse(HR_cv_clip$HR_NAME == "Sacramento River", alpha("#ADC397", 0.4),
+                    ifelse(HR_cv_clip$HR_NAME == "San Joaquin River", alpha("#DFBF2B", 0.4),
+                           ifelse(HR_cv_clip$HR_NAME == "Tulare Lake", alpha("#EA8005", 0.4),
+                                  "#f0f0f0")))
+
+
+fig_1_c <- ggplot() +
+  geom_sf(data = ca, fill = "grey97", color = NA, size = 0.3) +
+    geom_sf(data = cv_3310, fill = "white", color = "black", size = 0.6) +
+  geom_sf(data = HR_cv_clip, fill = HR_colors, color = NA) +
+  # add water features
+  geom_sf(data = rivers_major_cv, aes(linetype = "Rivers"), color = "#1D91C0", linewidth = 0.8) +
+  geom_sf(data = wetlands, aes(fill = "Wetlands"), color = NA) +
+  # make manual legend
+  scale_fill_manual(name = "Water Features", values = c("Wetlands" = "#2CA25F")) +
+  scale_linetype_manual(name = "", values = c("Rivers" = 1)) +
+  guides(linetype = guide_legend(override.aes = list(linewidth = 4)))+
+  theme_style +
+  theme(legend.text = element_text(size = 15),
+        legend.title = element_text(size = 14, face = "bold"),
+        legend.position =c(0.86,.87))  +
+  coord_sf(xlim = c(-122.7, -118.4), ylim = c(34.7, 40.4), crs = 4326, expand = FALSE)  +
+  annotate("text", x = -120.5, y = 40.1, label = "B", fontface = "bold", size = 10) +
+  annotate("text", x = -120.8, y = 39.4, label = "Sac.\nRiver\nHR", size = 8) +
+  annotate("text", x = -119.8, y = 38, label = "San\nJoaquin\nRiver\nHR", size = 8) +
+  annotate("text", x = -121.0, y = 36, label = "Tulare\nLake\nHR", size = 8) +
+  annotation_scale(location = "bl", width_hint = 0.22, pad_x = unit(.2, "cm"), pad_y = unit(.2, "cm")) +
+  annotation_north_arrow(location = "bl",  pad_x = unit(.2, "cm"), pad_y = unit(1.2, "cm"))
+
+ggsave(fig_1_c, file = here("outputs", "figures", "main", "fig_1_c_v2.png"), dpi = 400, bg = "white")
 ```
 
 
@@ -228,8 +232,8 @@ plot data
 format data
 ```{r}
 ### get everything in the correct crs
-#target_crs <- 3310
-#cv_3310 <- st_transform(cv, target_crs)
+target_crs <- 3310
+cv_3310 <- st_transform(cv, target_crs)
 #
 #iq <- st_read(here("data", "raw", "public", "i15_crop_mapping_2022_shp", "i15_crop_mapping_2022.shp")) #%>% 
 #  st_zm(drop = TRUE) %>% 
@@ -244,52 +248,54 @@ format data
 #
 ### save to pull this up later for heat extreme proj
 ##saveRDS(iq_cv, "landIQ_cv_2022.rds")
-#
+
+iq_cv <- readRDS(here("data", "interim", "landIQ_cv_2022.rds"))
+
 ### pull out crop data to filter on later
 ## these are 2-3 digit codes but the first letter is the main crop type - this could be refined
-#iq_cv <- iq_cv %>% 
-#  mutate(main_letter = substr(MAIN_CROP, 1, 1))
-#
-#unique(iq_cv$main_letter)
-#
-### assign irrigation type 
-#irrigation_type <- data.frame(crop_group = c("F", "I", "P", "G" ,"T", "Y", "X", "D", "C", "V", "R", #"*")) %>% 
-#  mutate(irrigation = case_when(crop_group %in% c("R",  "P") ~ "Flood",
-#                                crop_group %in% c("G","F") ~ "Sprinkler",
-#                                crop_group %in% c("V", "C", "D", "T", "Y") ~ "Drip",
-#                                TRUE ~ "Unknown"))
-#iq_cv_irrigation <- iq_cv %>% 
-#  left_join(irrigation_type, by = c("main_letter" = "crop_group")) %>% 
-#  mutate(irrigation = case_when(is.na(irrigation) ~ "Urban",
-#                                TRUE ~ irrigation)) %>% 
-#  mutate(irrigation = factor(irrigation, 
-#                             levels = c("Flood", "Sprinkler", "Drip", "Unknown", "Urban")))
-#
+iq_cv <- iq_cv %>% 
+  mutate(main_letter = substr(MAIN_CROP, 1, 1))
+
+unique(iq_cv$main_letter)
+
+## assign irrigation type 
+irrigation_type <- data.frame(crop_group = c("F", "I", "P", "G" ,"T", "Y", "X", "D", "C", "V", "R", "*")) %>% 
+  mutate(irrigation = case_when(crop_group %in% c("R",  "P") ~ "Flood",
+                                crop_group %in% c("G","F") ~ "Sprinkler",
+                                crop_group %in% c("V", "C", "D", "T", "Y") ~ "Drip",
+                                TRUE ~ "Unknown"))
+iq_cv_irrigation <- iq_cv %>% 
+  left_join(irrigation_type, by = c("main_letter" = "crop_group")) %>% 
+  mutate(irrigation = case_when(is.na(irrigation) ~ "Urban",
+                                TRUE ~ irrigation)) %>% 
+  mutate(irrigation = factor(irrigation, 
+                             levels = c("Flood", "Sprinkler", "Drip", "Unknown", "Urban")))
+
 ```
 
 plot data
 ```{r}
-### make hydro colors
-#irrigation_colors <- c("Flood" = "#e31a1c",
-#                       "Sprinkler" = "#6592d6",
-#                       "Drip" = "#cce5ff",
-#                       "Urban" = "#d9d9d9")
-#
-#fig_1_d <- ggplot() +
-#  geom_sf(data = ca, fill = "grey97", color = NA, size = 0.3) +
-#  geom_sf(data = cv_3310, fill = "white", color = "black", size = 0.6) +
-#  geom_sf(data = iq_cv_irrigation, aes(fill = irrigation), color = NA) +
-#  scale_fill_manual(values = irrigation_colors, na.value = "#f0f0f0") +
-#  labs(fill = "Irrigation Type") +
-#  theme_style +
-#  theme(legend.text = element_text(size = 15),
-#        legend.title = element_text(size = 14, face = "bold"),
-#        legend.position =c(0.86,.87)) +
-#  coord_sf(xlim = c(-122.7, -118.4), ylim = c(34.7, 40.4), crs = 4326, expand = FALSE) +
-#  annotate("text", x = -120.5, y = 40.1, label = "D", fontface = "bold", size = 10)
-#
-#
-#ggsave(fig_1_d, file = here("outputs", "figures", "main", "fig_1_d_v1.png"), dpi = 400, bg = "white")
+## make hydro colors
+irrigation_colors <- c("Flood" = "#e31a1c",
+                       "Sprinkler" = "#6592d6",
+                       "Drip" = "#cce5ff",
+                       "Urban" = "#d9d9d9")
+
+fig_1_d <- ggplot() +
+  geom_sf(data = ca, fill = "grey97", color = NA, size = 0.3) +
+  geom_sf(data = cv_3310, fill = "white", color = "black", size = 0.6) +
+  geom_sf(data = iq_cv_irrigation, aes(fill = irrigation), color = NA) +
+  scale_fill_manual(values = irrigation_colors, na.value = "#f0f0f0") +
+  labs(fill = "Irrigation Type") +
+  theme_style +
+  theme(legend.text = element_text(size = 15),
+        legend.title = element_text(size = 14, face = "bold"),
+        legend.position =c(0.86,.87)) +
+  coord_sf(xlim = c(-122.7, -118.4), ylim = c(34.7, 40.4), crs = 4326, expand = FALSE) +
+  annotate("text", x = -120.5, y = 40.1, label = "C", fontface = "bold", size = 10)
+
+
+ggsave(fig_1_d, file = here("outputs", "figures", "main", "fig_1_d_v2.png"), dpi = 400, bg = "white")
 ```
 
 **Combine for full Fig 1**
@@ -309,6 +315,112 @@ plot data
 
 
 ```
+
+new Fig 1 based on Erin's and Alex's suggestions
+
+```{r}
+## precip
+fig_1_a_pp <- HR_prism_monthly_df %>% 
+  filter(region == "Sacramento River" | region == "San Joaquin River" | region == "Tulare Lake") %>% 
+  mutate(month = match(month, month.abb)) %>% 
+  ggplot(aes(x = month, y = precip, color = region, group = region)) +
+  geom_line(size = 1.5) +
+  geom_point(size = 4) +
+  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005")) +
+  labs(y = "Precip. (mm)", color = "Hydrologic Region", x = NULL) +
+  theme_bw() +
+  theme(legend.position =c(0.58,.70), 
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        panel.grid = element_blank(),
+        legend.title = element_text(size = 15, face = "bold"),
+        legend.text  = element_text(size = 14),
+        legend.background = element_blank(),
+        plot.margin = margin(0,0,0,0))   +
+  #guides(color = FALSE)+
+  scale_x_continuous(breaks = 1:12, limits = c(1,12)) + #
+  #scale_x_discrete(expand = c(0.02,0)) +
+  #scale_y_continuous(expand = c(0.02,0)) +
+  annotate("text", x = 1.8, y = 172.5, label = "A", fontface = "bold", size = 10)
+
+
+## upload SMAP
+smap_9km <- read.csv(here("data","raw", "public", "SMAP_monthly_HR_means_2016_2023.csv"))
+
+fig_1_b_sm <- smap_9km %>% 
+  rename(region = HR_NAME,
+         smap = mean) %>% 
+  group_by(region, month) %>% 
+  summarise(mean = mean(smap, na.rm = TRUE)) %>% 
+  mutate(month = factor(as.numeric(month)), levels = 1:12, labels = month.abb) %>% 
+  ggplot(aes(x = month, y = mean, color = region, group = region)) +
+  geom_line(size = 1.5) +
+  geom_point(size = 4) +
+  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005")) +
+  labs(y = "Soil Moisture (m³/m³)", color = "Hydrologic Region", x = NULL) +
+  theme_bw() +
+  theme(#legend.position =c(0.55,.59), 
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        panel.grid = element_blank(),
+        legend.title = element_text(size = 17, face = "bold"),
+        legend.text  = element_text(size = 16),
+        plot.margin = margin(0,0,0,0)) +
+  guides(color = FALSE) #+
+  #scale_x_discrete(expand = c(0.02, 0.1)) # +
+  #scale_y_continuous(expand = c(0.02,0)) +
+  #annotate("text", x = 1.8, y = 170, label = "B", fontface = "bold", size = 10)
+  
+
+## upload ET (openET)
+
+openet <- read.csv(here("data","raw", "public", "OpenET_monthly_HR_means_2021_2023.csv"))
+
+fig_1_c_et <- openet %>% 
+  rename(region = HR_NAME,
+         openet = mean) %>% 
+  group_by(region, month) %>% 
+  summarise(mean = mean(openet, na.rm = TRUE)) %>% 
+  mutate(month = factor(as.numeric(month)), levels = 1:12, labels = month.abb) %>% 
+  ggplot(aes(x = month, y = mean, color = region, group = region)) +
+  geom_line(size = 1.5) +
+  geom_point(size = 4) +
+  scale_color_manual(values = c("#ADC397","#DFBF2B","#EA8005")) +
+  labs(y = "Evapotranspiration (mm)", color = "Hydrologic Region", x = NULL) +
+  theme_bw() +
+  theme(#legend.position =c(0.55,.59), 
+        axis.title = element_text(size = 15, face = "bold"),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        panel.grid = element_blank(),
+        legend.title = element_text(size = 17, face = "bold"),
+        legend.text  = element_text(size = 16),
+        plot.margin = margin(0,0,0,0)) +
+  guides(color = FALSE) #+
+  scale_x_discrete(expand = c(0.02, 0.1))# +
+  #scale_y_continuous(expand = c(0.02,0)) +
+  annotate("text", x = 1.8, y = 170, label = "B", fontface = "bold", size = 10)
+
+  
+  
+### combine them
+
+# split into top/bottom rows
+bottom_row <- (fig_1_c | plot_spacer()| fig_1_d ) +
+  plot_layout(widths = c(1, 0.04, 1))  # tiny gap
+
+top_row <- fig_1_a_pp | fig_1_b_sm | fig_1_c_et
+
+fig_1_full <- top_row / bottom_row +
+  plot_layout(heights = c(0.8, 2))
+
+ggsave(fig_1_full, file = here("outputs", "figures", "main", "fig_1_full_v2.png"), 
+       dpi = 400, bg = "white",
+       width = 12, height = 12)
+```
+
 
 ## Figure 2
 
@@ -621,8 +733,8 @@ both_hydro_coef <- bind_rows(abund_hydro_coef, wnv_hydro_coef) %>%
                          TRUE ~ NA_character_)) %>% 
   mutate(hydro_var = case_when(grepl("soilmoisture", hydro_var) ~ "Soil Moisture",
                                grepl("et", hydro_var) ~ "Evapotranspiration",
-                               grepl("jrc_5km", hydro_var) ~ "Standing Water",
-                               grepl("jrc_10km", hydro_var) ~ "Standing Water (10km)",
+                               grepl("jrc_5km", hydro_var) ~ "Surface Water", #Standing 
+                               grepl("jrc_10km", hydro_var) ~ "Surface Water (10km)",
                                TRUE ~ NA_character_))
 
 #write.csv(both_hydro_coef, here("outputs", "models", "both_hydro_coef.csv"), row.names = FALSE)
@@ -633,8 +745,8 @@ plot data
 hydro_colors <- c(  
   "Soil Moisture" =     "#D3105C" , 
   "Evapotranspiration" = "#3A5D3D",
-  "Standing Water" =  "#4C4976",
-  "Standing Water (10km)" = "#D87B82")
+  "Surface Water" =  "#4C4976", #Standing 
+  "Surface Water (10km)" = "#D87B82") #Standing 
 
 lag_alpha <- c("0 mo" = 1,
                "1 mo" = 0.75,
@@ -642,9 +754,9 @@ lag_alpha <- c("0 mo" = 1,
                "3 mo" = 0.35)
 
 fig_3_c <- both_hydro_coef %>% 
-  filter(hydro_var != "Standing Water (10km)") %>% 
+  filter(hydro_var != "Surface Water (10km)") %>% #Standing
   mutate(hydro_var = factor(hydro_var,
-                               levels = c("Soil Moisture","Standing Water", "Evapotranspiration" ))) %>% 
+                               levels = c("Soil Moisture","Surface Water", "Evapotranspiration" ))) %>% #Standing 
   ggplot(aes(x = outcome, y = estimate, color = hydro_var, alpha = lag)) +
   geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
                     ymax = estimate + 1.96 * std.error),width = 0.35, linewidth = 2,
@@ -703,7 +815,7 @@ fig_3_c_v3 <- fig_3_c + theme(legend.position = "right")
 fig_3_full <- (fig_3_a_v3 + fig_3_b_v3)/ fig_3_c_v3 +
   plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(size = 28, face = "bold"))
 
-ggsave(fig_3_full, file = here("outputs", "figures", "main", "fig_3_full_v4.png"),
+ggsave(fig_3_full, file = here("outputs", "figures", "main", "fig_3_full_v5.png"),
        width = 13, height = 10, 
        dpi = 400, bg = "white")
 ```

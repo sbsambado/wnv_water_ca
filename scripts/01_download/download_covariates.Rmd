@@ -24,8 +24,8 @@ library(tidyverse)
 library(data.table)
 
 ## upload cluster information
-cluster_shp <- st_read(here("data", "spatial_boundaries", "cluster_all_polygon.shp"))
-cluster_info <- read.csv(here("data", "interim", "cluster_all_info.csv"))
+#cluster_shp <- st_read(here("data", "spatial_boundaries", "cluster_all_polygon.shp"))
+#cluster_info <- read.csv(here("data", "interim", "cluster_all_info.csv"))
 
 ## upload california boundaries
 options(tigris_use_cache = TRUE)
@@ -529,6 +529,30 @@ jrc_10km_cluster_df <- water_dt %>%
 
 #write.csv(jrc_10km_cluster_df, here("data", "interim", "covariate_jrc10km_cluster.csv"), row.names = FALSE)
 
-
-
 ```
+
+## Covariates for Figure 1
+
+Need to create shp file for GEE to pull down hydrological regions data but make sure it's only for data within alluvial boundary 
+```{r}
+# upload and transform crs
+HR <- st_read(here("data", "spatial_boundaries", "i03_Hydrologic_Regions", "i03_Hydrologic_Regions.shp")) 
+
+cv <- st_read(here("data", "spatial_boundaries", "centralvalley", "centralvalley.shp")) %>% 
+  st_transform(st_crs(HR))
+
+# filter for 3 regions
+HR_filtered <- HR %>% 
+  filter(HR_NAME %in% c("Sacramento River", "San Joaquin River", "Tulare Lake"))
+
+# clip regions to alluvial boundary
+HR_cv <- HR_filtered %>% 
+  st_intersection(cv)
+
+#plot(HR_cv) # check
+
+# save as a shp file for GEE
+#st_write(HR_cv, here("data", "spatial_boundaries", "HR_cv", "HR_cv.shp"), delete_layer = TRUE)
+```
+
+
