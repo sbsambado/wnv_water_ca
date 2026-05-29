@@ -214,6 +214,23 @@ arbonet %>%
   dplyr::select(county, mean_incidence_100k, total_cases) %>%
   mutate(mean_incidence_100k = round(mean_incidence_100k,2))
 ```
+what prop of ca is reported cases
+```{r}
+arbonet_all <- arbonet_files %>% map_dfr(read.csv) %>% clean_names() %>% 
+  filter(year %in% 2003:2023) %>% 
+  mutate(state = substr(location,1,2))
+
+arbonet_all %>% #54885	 total reg cases
+  summarise(n = sum(neuroinvasive_disease_cases, na.rm =TRUE))
+
+arbonet_all %>% 
+  filter(state == "CA") %>% #8030	 total reg cases
+  summarise(n = sum(neuroinvasive_disease_cases, na.rm =TRUE))
+
+8030/54885	# 0.146 total case
+4862/27373 # 0.177 ND cases
+```
+
 ### Table S3
 
 ```{r}
@@ -275,3 +292,5 @@ length(unique(calsurv_all_clean_wnv$trapstation_id)) # 18,491
 calsurv_tar_clean_wnv %>% filter(WNV_MIR > 100) # 
 66/49029
 ```
+
+
