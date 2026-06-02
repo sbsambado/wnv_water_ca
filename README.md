@@ -1,6 +1,11 @@
-Manuscript under review
+# Water availability & WNV hotspots
 
-Water availability has stronger effects on West Nile virus dynamics in water-limited regions
+This repository contains the full workflow for analyzing environmental and hydrological drivers of West Nile Virus (WNV) patterns in California. 
+
+
+<i>Manuscript under review</i>
+
+**Water availability has stronger effects on West Nile virus dynamics in water-limited regions**
 
 Samantha Sambado*, Andrew J MacDonald, Alexandra G Konings, Erin A Mordecai
 
@@ -9,10 +14,6 @@ Samantha Sambado*, Andrew J MacDonald, Alexandra G Konings, Erin A Mordecai
 preprint: https://doi.org/10.64898/2026.05.29.728787
 
 Dryad repository: https://doi.org/10.5061/dryad.cnp5hqcm6
-
-# Water availability & WNV hotspots
-
-This repository contains the full workflow for analyzing environmental and hydrological drivers of West Nile Virus (WNV) patterns in California. 
 
 ---
 
