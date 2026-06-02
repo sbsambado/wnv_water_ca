@@ -1,5 +1,11 @@
 Manuscript under review
 
+Water availability has stronger effects on West Nile virus dynamics in water-limited regions
+
+Samantha Sambado*, Andrew J MacDonald, Alexandra G Konings, Erin A Mordecai
+
+*corresponding author: ssambado@stanford.edu 
+
 preprint: https://doi.org/10.64898/2026.05.29.728787
 
 Dryad repository: https://doi.org/10.5061/dryad.cnp5hqcm6
