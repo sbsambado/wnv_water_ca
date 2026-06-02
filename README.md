@@ -1,4 +1,8 @@
-Manuscript in prep
+Manuscript under review
+
+preprint: https://doi.org/10.64898/2026.05.29.728787
+
+Dryad repository: https://doi.org/10.5061/dryad.cnp5hqcm6
 
 # Water availability & WNV hotspots
 
